@@ -17,14 +17,20 @@ public class ArcticNightsConfig {
             .comment("Whether temperature-based biome distribution should follow circumference")
             .define("bandedTemperature", true);
 
+    private static final ModConfigSpec.ConfigValue<Integer> FIRST_TIME_OF_DAY = BUILDER
+            .comment("First time of day in game ticks when a new game is started")
+            .define("firstTimeOfDay", 1000);
+
     static final ModConfigSpec SPEC = BUILDER.build();
 
     public static int circumferenceChunkDistance;
     public static boolean bandedTemperature;
+    public static int firstTimeOfDay;
 
     @SubscribeEvent
     static void onLoad(final ModConfigEvent event) {
         circumferenceChunkDistance = CIRCUMFERENCE_BLOCK_DISTANCE.get()>>4;
         bandedTemperature = BANDED_TEMPERATURE.get();
+        firstTimeOfDay = FIRST_TIME_OF_DAY.get();
     }
 }

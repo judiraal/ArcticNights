@@ -10,17 +10,22 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ServerLevelData;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.loading.FMLLoader;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import org.joml.Quaternionf;
 
 import static net.minecraft.world.level.block.state.properties.BlockStateProperties.INVERTED;
 import static net.minecraft.world.level.block.state.properties.BlockStateProperties.POWER;
 
 @Mod(ArcticNights.MOD_ID)
+@EventBusSubscriber
 public class ArcticNights {
     public static final String MOD_ID = "arcticnights";
     private static final boolean SERENE_SEASONS = modLoaded("sereneseasons");
@@ -31,6 +36,15 @@ public class ArcticNights {
 
     public ArcticNights(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
+    }
+
+    @SubscribeEvent
+    public static void onLevelLoad(LevelEvent.Load event) {
+        if (ArcticNightsConfig.firstTimeOfDay > 0 && event.getLevel() instanceof ServerLevel serverLevel &&
+                serverLevel.getGameTime() == 0 && serverLevel.dimension() == Level.OVERWORLD &&
+                serverLevel.getLevelData() instanceof ServerLevelData data) {
+            data.setDayTime(ArcticNightsConfig.firstTimeOfDay);
+        }
     }
 
     public static int seasonalSkyDarken(LevelReader level, BlockPos pos) {
@@ -74,7 +88,9 @@ public class ArcticNights {
     }
 
     public static double seasonalClimateTemperature(int zPos) {
-        return Mth.cos((float) (zPos - 5000) / 10000 * (float) Math.PI) * 1.2F;
+        int c = ArcticNightsConfig.circumferenceChunkDistance;
+
+        return Mth.cos((float) (zPos - (c<<1)) / (c<<2) * (float) Math.PI) * 0.55F + 0.05F;
     }
 
     private static class SereneSeasonsCompat {

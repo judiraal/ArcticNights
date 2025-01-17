@@ -13,6 +13,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public class Climate$SamplerMixin {
     @Redirect(method = "sample", at = @At(value = "INVOKE", ordinal = 0, target = "net/minecraft/world/level/levelgen/DensityFunction.compute (Lnet/minecraft/world/level/levelgen/DensityFunction$FunctionContext;)D"))
     private double msc_bandedTemperature(DensityFunction instance, DensityFunction.FunctionContext functionContext, @Local(ordinal = 3) int xPos, @Local(ordinal = 5) int zPos) {
-        return ArcticNightsConfig.bandedTemperature ? ArcticNights.seasonalClimateTemperature(zPos) : instance.compute(functionContext);
+        double density = instance.compute(functionContext);
+        return ArcticNightsConfig.bandedTemperature ? ArcticNights.seasonalClimateTemperature(zPos) + (density / 8) : density;
     }
 }

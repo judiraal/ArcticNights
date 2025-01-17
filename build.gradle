@@ -78,8 +78,11 @@ configurations {
 
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
-    compileOnly "curse.maven:serene-seasons-291874:5753503"
-    //implementation "curse.maven:glitchcore-955399:5660740"
+    implementation "curse.maven:serene-seasons-291874:5753503"
+    implementation "curse.maven:glitchcore-955399:5660740"
+
+    localRuntime "curse.maven:xaeros-minimap-263420:6012855"
+    localRuntime "curse.maven:xaeros-world-map-317780:5987169"
 }
 
 tasks.withType(ProcessResources).configureEach {
