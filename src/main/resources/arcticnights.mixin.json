@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "package": "com.judiraal.arcticnights.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "arcticnights.mixin-refmap.json",
+  "mixins": [
+    "Climate$SamplerMixin",
+    "DaylightDetectorBlockMixin",
+    "LevelChunkMixin"
+  ],
+  "minVersion": "0.8",
+  "client": [
+    "ClientLevelMixin",
+    "FogRendererMixin",
+    "LevelRendererMixin"
+  ]
+}
