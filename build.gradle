@@ -80,6 +80,8 @@ dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
     implementation "curse.maven:serene-seasons-291874:5753503"
     implementation "curse.maven:glitchcore-955399:5660740"
+    implementation "maven.modrinth:sodium:mc1.21.1-0.6.5-neoforge"
+    implementation "curse.maven:irisshaders-455508:5957827"
 
     localRuntime "curse.maven:xaeros-minimap-263420:6012855"
     localRuntime "curse.maven:xaeros-world-map-317780:5987169"

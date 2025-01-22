@@ -1,4 +1,4 @@
-package com.judiraal.arcticnights.mixin;
+package com.judiraal.arcticnights.mixin.minecraft;
 
 import com.judiraal.arcticnights.ArcticNights;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public class LevelRendererMixin {
     @Redirect(method = "renderSky", at = @At(value = "INVOKE", target = "com/mojang/math/Axis.rotationDegrees (F)Lorg/joml/Quaternionf;", ordinal = 3))
     private Quaternionf msc_solarAngle(Axis instance, float pDegrees) {
-        return ArcticNights.Client.currentAngle();
+        return ArcticNights.Client.currentSunRotation();
     }
 
     @ModifyExpressionValue(method = "renderSky", at = @At(value = "INVOKE", target = "net/minecraft/client/multiplayer/ClientLevel.getTimeOfDay (F)F"))

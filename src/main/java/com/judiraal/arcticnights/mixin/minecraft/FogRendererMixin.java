@@ -1,4 +1,4 @@
-package com.judiraal.arcticnights.mixin;
+package com.judiraal.arcticnights.mixin.minecraft;
 
 import com.judiraal.arcticnights.ArcticNights;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;

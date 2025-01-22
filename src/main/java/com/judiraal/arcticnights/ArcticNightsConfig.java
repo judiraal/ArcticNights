@@ -1,36 +1,33 @@
 package com.judiraal.arcticnights;
 
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.ModConfigSpec;
+import org.apache.commons.lang3.tuple.Pair;
 
-@EventBusSubscriber(modid = ArcticNights.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 public class ArcticNightsConfig {
-    private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
+    public static final ArcticNightsConfig CONFIG;
+    static final ModConfigSpec SPEC;
 
-    private static final ModConfigSpec.ConfigValue<Integer> CIRCUMFERENCE_BLOCK_DISTANCE = BUILDER
-            .comment("The distance in blocks for a full circumference")
-            .defineInRange("circumferenceBlockDistance", 40000, 4000, 400000);
+    static {
+        Pair<ArcticNightsConfig, ModConfigSpec> pair =
+                new ModConfigSpec.Builder().configure(ArcticNightsConfig::new);
+        CONFIG = pair.getLeft();
+        SPEC = pair.getRight();
+    }
 
-    private static final ModConfigSpec.BooleanValue BANDED_TEMPERATURE = BUILDER
-            .comment("Whether temperature-based biome distribution should follow circumference")
-            .define("bandedTemperature", true);
+    public static ModConfigSpec.IntValue circumferenceBlockDistance;
+    public static ModConfigSpec.BooleanValue bandedTemperature;
+    public static ModConfigSpec.IntValue firstTimeOfDay;
+    public static ModConfigSpec.BooleanValue shaderSunPathRotation;
 
-    private static final ModConfigSpec.ConfigValue<Integer> FIRST_TIME_OF_DAY = BUILDER
-            .comment("First time of day in game ticks when a new game is started")
-            .define("firstTimeOfDay", 1000);
-
-    static final ModConfigSpec SPEC = BUILDER.build();
-
-    public static int circumferenceChunkDistance;
-    public static boolean bandedTemperature;
-    public static int firstTimeOfDay;
-
-    @SubscribeEvent
-    static void onLoad(final ModConfigEvent event) {
-        circumferenceChunkDistance = CIRCUMFERENCE_BLOCK_DISTANCE.get()>>4;
-        bandedTemperature = BANDED_TEMPERATURE.get();
-        firstTimeOfDay = FIRST_TIME_OF_DAY.get();
+    private ArcticNightsConfig(final ModConfigSpec.Builder builder) {
+        circumferenceBlockDistance = builder.comment("The distance in blocks for a full circumference, i.e. double the distance between two poles")
+                .defineInRange("circumferenceBlockDistance", 40000, 4000, 400000);
+        bandedTemperature = builder.comment("Whether temperature-based biome distribution should follow circumference")
+                .define("bandedTemperature", true);
+        firstTimeOfDay = builder.comment("First time of day in game ticks when a new game is started")
+                .defineInRange("firstTimeOfDay", 1000, 0, 12000);
+        shaderSunPathRotation = builder.comment("Enable dynamic sunPathRotation for Iris shaders")
+                .define("shaderSunPathRotation", true);
+        builder.build();
     }
 }

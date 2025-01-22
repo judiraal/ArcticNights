@@ -3,15 +3,23 @@
   "package": "com.judiraal.arcticnights.mixin",
   "compatibilityLevel": "JAVA_21",
   "refmap": "arcticnights.mixin-refmap.json",
+  "plugin": "com.judiraal.arcticnights.ConditionalMixin",
   "mixins": [
-    "Climate$SamplerMixin",
-    "DaylightDetectorBlockMixin",
-    "LevelChunkMixin"
+    "iris.CelestialUniformsMixin",
+    "iris.PackDirectivesMixin",
+    "iris.ShadowRendererMixin",
+    "iris.WorldTimeUniformsMixin",
+    "minecraft.Climate$SamplerMixin",
+    "minecraft.DaylightDetectorBlockMixin",
+    "minecraft.LevelChunkMixin",
+    "minecraft.LevelMixin"
   ],
   "minVersion": "0.8",
   "client": [
-    "ClientLevelMixin",
-    "FogRendererMixin",
-    "LevelRendererMixin"
+    "iris.IrisRenderingPipelineMixin",
+    "minecraft.ClientLevelMixin",
+    "minecraft.FogRendererMixin",
+    "minecraft.ItemPropertiesMixin",
+    "minecraft.LevelRendererMixin"
   ]
 }

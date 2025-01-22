@@ -1,7 +1,12 @@
 package com.judiraal.arcticnights;
 
+import com.judiraal.arcticnights.util.ReverseTimeOfDay;
+import com.mojang.logging.LogUtils;
 import com.mojang.math.Axis;
+import net.irisshaders.iris.Iris;
+import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -20,6 +25,7 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import org.joml.Quaternionf;
+import org.slf4j.Logger;
 
 import static net.minecraft.world.level.block.state.properties.BlockStateProperties.INVERTED;
 import static net.minecraft.world.level.block.state.properties.BlockStateProperties.POWER;
@@ -27,8 +33,10 @@ import static net.minecraft.world.level.block.state.properties.BlockStatePropert
 @Mod(ArcticNights.MOD_ID)
 @EventBusSubscriber
 public class ArcticNights {
+    public static final Logger LOGGER = LogUtils.getLogger();
     public static final String MOD_ID = "arcticnights";
     private static final boolean SERENE_SEASONS = modLoaded("sereneseasons");
+    private static final boolean IRIS = modLoaded("iris");
 
     private static boolean modLoaded(String modName) {
         return FMLLoader.getLoadingModList().getModFileById(modName) != null;
@@ -40,10 +48,10 @@ public class ArcticNights {
 
     @SubscribeEvent
     public static void onLevelLoad(LevelEvent.Load event) {
-        if (ArcticNightsConfig.firstTimeOfDay > 0 && event.getLevel() instanceof ServerLevel serverLevel &&
+        if (ArcticNightsConfig.firstTimeOfDay.get() > 0 && event.getLevel() instanceof ServerLevel serverLevel &&
                 serverLevel.getGameTime() == 0 && serverLevel.dimension() == Level.OVERWORLD &&
                 serverLevel.getLevelData() instanceof ServerLevelData data) {
-            data.setDayTime(ArcticNightsConfig.firstTimeOfDay);
+            data.setDayTime(ArcticNightsConfig.firstTimeOfDay.get());
         }
     }
 
@@ -80,7 +88,7 @@ public class ArcticNights {
     }
 
     public static float seasonalDistanceEffect(Level level, ChunkPos chunkPos) {
-        int c = ArcticNightsConfig.circumferenceChunkDistance;
+        int c = ArcticNightsConfig.circumferenceBlockDistance.get()>>4;
         float distance = (float) Math.floorMod(chunkPos.z + (c >> 3), c) / c * 2;
         if (distance > 1) distance = 2 - distance;
         int day = SERENE_SEASONS ? SereneSeasonsCompat.HOLDER.getDay(level) : 80;
@@ -88,9 +96,13 @@ public class ArcticNights {
     }
 
     public static double seasonalClimateTemperature(int zPos) {
-        int c = ArcticNightsConfig.circumferenceChunkDistance;
-
+        int c = ArcticNightsConfig.circumferenceBlockDistance.get()>>4;
         return Mth.cos((float) (zPos - (c<<1)) / (c<<2) * (float) Math.PI) * 0.55F + 0.05F;
+    }
+
+    private static int seasonalDayTime(Level level, ChunkPos chunkPos, int dayTimeTicks) {
+        float seasonalTimeOfDay = seasonalTimeOfDay(level, chunkPos, ReverseTimeOfDay.getTimeOfDay(dayTimeTicks));
+        return ReverseTimeOfDay.reverseTimeOfDay(seasonalTimeOfDay);
     }
 
     private static class SereneSeasonsCompat {
@@ -102,20 +114,49 @@ public class ArcticNights {
     }
 
     public static class Client {
-        public static Quaternionf currentAngle() {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc.player != null && mc.level != null) {
-                float distance = seasonalDistanceEffect(mc.level, mc.player.chunkPosition());
-                return Axis.YP.rotationDegrees(-90f).rotateZ((distance * 0.8f - 0.4f) * (float) Math.PI);
+        private static long lastAngleTime;
+        private static float lastAngle;
+        private static int lastDayTimeTicks = -1;
+        private static int lastSeasonalDayTime;
+
+        public static float currentSunAngle() {
+            long angleTime = System.nanoTime();
+            if (angleTime - lastAngleTime > 10000000L) {
+                lastAngleTime = angleTime;
+                Minecraft mc = Minecraft.getInstance();
+                if (mc.player != null && mc.level != null) {
+                    float distance = seasonalDistanceEffect(mc.level, mc.player.chunkPosition());
+                    lastAngle = (distance * 0.8f - 0.4f) * (float) Math.PI;
+                } else
+                    lastAngle = 0;
             }
-            return Axis.YP.rotationDegrees(-90f);
+            return lastAngle;
+        }
+
+        public static Quaternionf currentSunRotation() {
+            return Axis.YP.rotationDegrees(-90f).rotateZ(IRIS && !IrisHelper.isFallback() ? 0 : currentSunAngle());
         }
 
         public static float seasonalTimeOfDay(float original) {
             Minecraft mc = Minecraft.getInstance();
-            if (mc.player != null)
+            if (mc.player != null && mc.level != null)
                 return ArcticNights.seasonalTimeOfDay(mc.level, mc.player.chunkPosition(), original);
             return original;
+        }
+
+        public static int seasonalDayTime(int dayTimeTicks) {
+            if (lastDayTimeTicks == dayTimeTicks) return lastSeasonalDayTime;
+            lastDayTimeTicks = dayTimeTicks;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null && mc.level != null)
+                return lastSeasonalDayTime = ArcticNights.seasonalDayTime(mc.level, mc.player.chunkPosition(), dayTimeTicks);
+            return lastSeasonalDayTime = dayTimeTicks;
+        }
+    }
+
+    public static class IrisHelper {
+        static boolean isFallback() {
+            return Iris.getCurrentPack().isEmpty();
         }
     }
 }

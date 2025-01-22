@@ -32,3 +32,10 @@ type="optional"
 versionRange="[10.1, )"
 ordering="AFTER"
 side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="iris"
+type="optional"
+versionRange="[1.8.1, )"
+ordering="AFTER"
+side="CLIENT"
