@@ -11,8 +11,7 @@
     "iris.WorldTimeUniformsMixin",
     "minecraft.Climate$SamplerMixin",
     "minecraft.DaylightDetectorBlockMixin",
-    "minecraft.LevelChunkMixin",
-    "minecraft.LevelMixin"
+    "minecraft.LevelChunkMixin"
   ],
   "minVersion": "0.8",
   "client": [
@@ -20,6 +19,7 @@
     "minecraft.ClientLevelMixin",
     "minecraft.FogRendererMixin",
     "minecraft.ItemPropertiesMixin",
-    "minecraft.LevelRendererMixin"
+    "minecraft.LevelRendererMixin",
+    "minecraft.LevelMixin"
   ]
 }
