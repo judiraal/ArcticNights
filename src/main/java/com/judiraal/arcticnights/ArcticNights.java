@@ -67,8 +67,10 @@ public class ArcticNights {
         float seasonalFactor = seasonalFactor(level);
         if (seasonalFactor < 0)
             return Mth.lerp(-seasonalFactor * distanceFactor, original, (float) Math.pow(original - 0.5F, 3) * 4 + 0.5F);
-        else
-            return Mth.lerp(seasonalFactor * distanceFactor, original, Mth.frac((float)Math.pow(Mth.frac(original + 0.5F) - 0.5F, 3) * 4 + 1.0F));
+        else {
+            var modified = Math.pow(Mth.frac(original + 0.5F) - 0.5F, 3) * 4 + 1.0F;
+            return (float) Mth.lerp((double) seasonalFactor * distanceFactor, original, Mth.frac(modified));
+        }
     }
 
     public static int calcSeasonalSkyDarken(Level level, ChunkPos pos) {
