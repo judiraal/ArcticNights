@@ -2,7 +2,7 @@ var Opcodes=Java.type('org.objectweb.asm.Opcodes')
 var InsnList=Java.type('org.objectweb.asm.tree.InsnList')
 var VarInsnNode=Java.type('org.objectweb.asm.tree.VarInsnNode')
 var MethodInsnNode=Java.type('org.objectweb.asm.tree.MethodInsnNode')
-var ASM = Java.type('net.neoforged.coremod.api.ASMAPI');
+var ASM = Java.type('net.minecraftforge.coremod.api.ASMAPI');
 
 function initializeCoreMod() {
     return {

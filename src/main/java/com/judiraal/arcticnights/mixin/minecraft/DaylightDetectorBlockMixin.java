@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 @Mixin(DaylightDetectorBlock.class)
 public class DaylightDetectorBlockMixin {
-    @Redirect(method = "useWithoutItem", at = @At(value = "INVOKE", target = "net/minecraft/world/level/block/DaylightDetectorBlock.updateSignalStrength (Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)V"))
+    @Redirect(method = "use", at = @At(value = "INVOKE", target = "net/minecraft/world/level/block/DaylightDetectorBlock.updateSignalStrength (Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)V"))
     private void msc$updateSignalStrength1(BlockState blockState, Level level, BlockPos pos) {
         ArcticNights.updateSignalStrength(blockState, level, pos);
     }

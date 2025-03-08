@@ -1,4 +1,4 @@
-package com.judiraal.arcticnights.mixin.iris;
+package com.judiraal.arcticnights.mixin.oculus;
 
 import com.judiraal.arcticnights.ArcticNights;
 import com.judiraal.arcticnights.ArcticNightsConfig;
@@ -14,7 +14,7 @@ public class ShadowRendererMixin {
         return ArcticNights.Client.seasonalTimeOfDay(original);
     }
 
-    @ModifyExpressionValue(method = {"renderShadows", "createShadowFrustum"}, at = @At(value = "FIELD", target = "net/irisshaders/iris/shadows/ShadowRenderer.sunPathRotation : F"))
+    @ModifyExpressionValue(method = {"renderShadows", "createShadowFrustum"}, remap = false, at = @At(value = "FIELD", target = "net/irisshaders/iris/shadows/ShadowRenderer.sunPathRotation : F"))
     private float an$sunPathRotation(float original) {
         return ArcticNightsConfig.shaderSunPathRotation.get() ? ArcticNights.Client.currentSunAngle() / (float) Math.PI * 180 : original;
     }

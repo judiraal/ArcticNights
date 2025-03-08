@@ -1,6 +1,6 @@
 package com.judiraal.arcticnights;
 
-import net.neoforged.fml.loading.FMLLoader;
+import net.minecraftforge.fml.loading.LoadingModList;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -25,7 +25,7 @@ public class ConditionalMixin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         Matcher matcher = MIXIN_PATTERN.matcher(mixinClassName);
-        if (matcher.find()) return FMLLoader.getLoadingModList().getModFileById(matcher.group(1)) != null;
+        if (matcher.find()) return LoadingModList.get().getModFileById(matcher.group(1)) != null;
         return false;
     }
 

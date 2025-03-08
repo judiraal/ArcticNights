@@ -1,31 +1,30 @@
 package com.judiraal.arcticnights;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Predicate;
 
 public class ArcticNightsConfig {
     public static final ArcticNightsConfig CONFIG;
-    static final ModConfigSpec SPEC;
+    static final ForgeConfigSpec SPEC;
 
     static {
-        Pair<ArcticNightsConfig, ModConfigSpec> pair =
-                new ModConfigSpec.Builder().configure(ArcticNightsConfig::new);
+        Pair<ArcticNightsConfig, ForgeConfigSpec> pair =
+                new ForgeConfigSpec.Builder().configure(ArcticNightsConfig::new);
         CONFIG = pair.getLeft();
         SPEC = pair.getRight();
     }
 
-    public static ModConfigSpec.IntValue circumferenceBlockDistance;
-    public static ModConfigSpec.BooleanValue bandedTemperature;
-    public static ModConfigSpec.IntValue firstTimeOfDay;
-    public static ModConfigSpec.BooleanValue shaderSunPathRotation;
-    public static ModConfigSpec.IntValue daysPerSeason;
-    public static ModConfigSpec.ConfigValue<List<? extends Integer>> structureDenyRange;
+    public static ForgeConfigSpec.IntValue circumferenceBlockDistance;
+    public static ForgeConfigSpec.BooleanValue bandedTemperature;
+    public static ForgeConfigSpec.IntValue firstTimeOfDay;
+    public static ForgeConfigSpec.BooleanValue shaderSunPathRotation;
+    public static ForgeConfigSpec.IntValue daysPerSeason;
+    public static ForgeConfigSpec.ConfigValue<List<? extends Integer>> structureDenyRange;
 
-    private ArcticNightsConfig(final ModConfigSpec.Builder builder) {
+    private ArcticNightsConfig(final ForgeConfigSpec.Builder builder) {
         circumferenceBlockDistance = builder.comment("The distance in blocks for a full circumference, i.e. double the distance between two poles.")
                 .defineInRange("circumferenceBlockDistance", 40000, 4000, 400000);
         bandedTemperature = builder.comment("Whether temperature-based biome distribution should follow circumference.")

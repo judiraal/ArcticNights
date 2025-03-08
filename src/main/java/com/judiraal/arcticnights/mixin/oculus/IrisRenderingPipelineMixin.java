@@ -1,14 +1,16 @@
-package com.judiraal.arcticnights.mixin.iris;
+package com.judiraal.arcticnights.mixin.oculus;
 
 import com.judiraal.arcticnights.ArcticNights;
 import com.judiraal.arcticnights.ArcticNightsConfig;
-import net.irisshaders.iris.shaderpack.properties.PackDirectives;
+import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
 
-@Mixin(PackDirectives.class)
-public class PackDirectivesMixin {
+@Mixin(IrisRenderingPipeline.class)
+public class IrisRenderingPipelineMixin {
+    @Final
     @Shadow
     private float sunPathRotation;
 
@@ -16,7 +18,7 @@ public class PackDirectivesMixin {
      * @author Judiraal
      * @reason Dynamic sunPathRotation
      */
-    @Overwrite
+    @Overwrite(remap = false)
     public float getSunPathRotation() {
         return ArcticNightsConfig.shaderSunPathRotation.get() ? ArcticNights.Client.currentSunAngle() / (float) Math.PI * 180 : sunPathRotation;
     }

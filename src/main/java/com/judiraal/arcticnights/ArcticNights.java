@@ -4,9 +4,7 @@ import com.judiraal.arcticnights.util.ReverseTimeOfDay;
 import com.mojang.logging.LogUtils;
 import com.mojang.math.Axis;
 import net.irisshaders.iris.Iris;
-import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -16,14 +14,12 @@ import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ServerLevelData;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.config.ModConfig;
-import net.neoforged.fml.loading.FMLLoader;
-import net.neoforged.neoforge.event.level.LevelEvent;
+import net.minecraftforge.event.level.LevelEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLLoader;
 import org.joml.Quaternionf;
 import org.slf4j.Logger;
 
@@ -31,7 +27,7 @@ import static net.minecraft.world.level.block.state.properties.BlockStatePropert
 import static net.minecraft.world.level.block.state.properties.BlockStateProperties.POWER;
 
 @Mod(ArcticNights.MOD_ID)
-@EventBusSubscriber
+@Mod.EventBusSubscriber
 public class ArcticNights {
     public static final Logger LOGGER = LogUtils.getLogger();
     public static final String MOD_ID = "arcticnights";
@@ -42,8 +38,8 @@ public class ArcticNights {
         return FMLLoader.getLoadingModList().getModFileById(modName) != null;
     }
 
-    public ArcticNights(IEventBus modEventBus, ModContainer modContainer) {
-        modContainer.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
+    public ArcticNights(FMLJavaModLoadingContext context) {
+        context.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
     }
 
     @SubscribeEvent
