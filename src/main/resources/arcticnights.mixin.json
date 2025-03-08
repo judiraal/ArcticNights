@@ -9,6 +9,7 @@
     "iris.PackDirectivesMixin",
     "iris.ShadowRendererMixin",
     "iris.WorldTimeUniformsMixin",
+    "minecraft.ChunkStatusTasksMixin",
     "minecraft.Climate$SamplerMixin",
     "minecraft.DaylightDetectorBlockMixin",
     "minecraft.LevelChunkMixin"
@@ -19,7 +20,7 @@
     "minecraft.ClientLevelMixin",
     "minecraft.FogRendererMixin",
     "minecraft.ItemPropertiesMixin",
-    "minecraft.LevelRendererMixin",
-    "minecraft.LevelMixin"
+    "minecraft.LevelMixin",
+    "minecraft.LevelRendererMixin"
   ]
 }

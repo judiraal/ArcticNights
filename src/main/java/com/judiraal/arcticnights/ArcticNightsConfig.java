@@ -3,6 +3,10 @@ package com.judiraal.arcticnights;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import org.apache.commons.lang3.tuple.Pair;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.function.Predicate;
+
 public class ArcticNightsConfig {
     public static final ArcticNightsConfig CONFIG;
     static final ModConfigSpec SPEC;
@@ -19,6 +23,7 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.IntValue firstTimeOfDay;
     public static ModConfigSpec.BooleanValue shaderSunPathRotation;
     public static ModConfigSpec.IntValue daysPerSeason;
+    public static ModConfigSpec.ConfigValue<List<? extends Integer>> structureDenyRange;
 
     private ArcticNightsConfig(final ModConfigSpec.Builder builder) {
         circumferenceBlockDistance = builder.comment("The distance in blocks for a full circumference, i.e. double the distance between two poles.")
@@ -33,6 +38,15 @@ public class ArcticNightsConfig {
                 "When no seasons mod is detected this is the number of days in a season.",
                         "Set to 0 to disable all seasonal effects.")
                 .defineInRange("daysPerSeason", 24, 0, 100);
+        structureDenyRange = builder.comment("Deny structures between these z block-coordinates.",
+                        " Default: [0, 0]",
+                        " Example: [-6000, 16000]")
+                .define("structureDenyRange", () -> Arrays.asList(0, 0), value -> {
+                    if (value instanceof List<?> l && l.size() == 2) {
+                        return ((Integer) l.get(0)) <= ((Integer) l.get(1));
+                    }
+                    return false;
+                });
 
         builder.build();
     }
