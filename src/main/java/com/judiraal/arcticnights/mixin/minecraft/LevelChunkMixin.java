@@ -1,8 +1,8 @@
 package com.judiraal.arcticnights.mixin.minecraft;
 
 
-import com.judiraal.arcticnights.ArcticNights;
-import com.judiraal.arcticnights.SkyDarkenHolder;
+import com.judiraal.arcticnights.util.SkyDarkenHolder;
+import com.judiraal.arcticnights.util.Calculations;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.spongepowered.asm.mixin.Final;
@@ -17,20 +17,20 @@ public class LevelChunkMixin implements SkyDarkenHolder {
     Level level;
 
     @Unique
-    private int msc$skyDarken = -1;
+    private int arcticnights$skyDarken = -1;
     @Unique
-    private long msc$lastGameTime = -1;
+    private long arcticnights$lastGameTime = -1;
 
     @Override
-    public int msc$getSkyDarken() {
-        if (msc$skyDarken == -1 && (level.dimensionType().hasCeiling() || !level.dimensionType().hasSkyLight() || level.dimensionType().hasFixedTime()))
-            msc$skyDarken = -2;
-        if (msc$skyDarken == -2) return ((LevelChunk)(Object)this).getLevel().getSkyDarken();
+    public int arcticnights$getSkyDarken() {
+        if (arcticnights$skyDarken == -1 && (level.dimensionType().hasCeiling() || !level.dimensionType().hasSkyLight() || level.dimensionType().hasFixedTime()))
+            arcticnights$skyDarken = -2;
+        if (arcticnights$skyDarken == -2) return ((LevelChunk)(Object)this).getLevel().getSkyDarken();
         long gameTime = level.getGameTime();
-        if (msc$skyDarken == -1 || gameTime-msc$lastGameTime > 100) {
-            msc$lastGameTime = gameTime;
-            msc$skyDarken = ArcticNights.calcSeasonalSkyDarken(level, ((LevelChunk)(Object)this).getPos());
+        if (arcticnights$skyDarken == -1 || gameTime- arcticnights$lastGameTime > 100) {
+            arcticnights$lastGameTime = gameTime;
+            arcticnights$skyDarken = Calculations.calcSeasonalSkyDarken(level, ((LevelChunk)(Object)this).getPos());
         }
-        return msc$skyDarken;
+        return arcticnights$skyDarken;
     }
 }

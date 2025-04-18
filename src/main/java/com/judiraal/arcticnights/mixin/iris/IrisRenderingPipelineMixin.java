@@ -1,7 +1,7 @@
 package com.judiraal.arcticnights.mixin.iris;
 
-import com.judiraal.arcticnights.ArcticNights;
 import com.judiraal.arcticnights.ArcticNightsConfig;
+import com.judiraal.arcticnights.util.Calculations;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,6 +20,6 @@ public class IrisRenderingPipelineMixin {
      */
     @Overwrite
     public float getSunPathRotation() {
-        return ArcticNightsConfig.shaderSunPathRotation.get() ? ArcticNights.Client.currentSunAngle() / (float) Math.PI * 180 : sunPathRotation;
+        return ArcticNightsConfig.shaderSunPathRotation.get() ? Calculations.Client.currentSunAngle() / (float) Math.PI * 180 : sunPathRotation;
     }
 }

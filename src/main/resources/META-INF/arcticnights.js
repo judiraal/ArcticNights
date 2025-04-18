@@ -19,7 +19,7 @@ function initializeCoreMod() {
                             if (insn.getOpcode() === Opcodes.INVOKEINTERFACE) {
                                 var patchList = new InsnList();
                                 patchList.add(new VarInsnNode(Opcodes.ALOAD, 1));
-                                patchList.add(new MethodInsnNode(Opcodes.INVOKESTATIC, 'com/judiraal/arcticnights/ArcticNights', "seasonalSkyDarken", "(Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;)I"));
+                                patchList.add(new MethodInsnNode(Opcodes.INVOKESTATIC, 'com/judiraal/arcticnights/util/Calculations', "seasonalSkyDarken", "(Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;)I"));
                                 instructions.insertBefore(insn, patchList);
                                 instructions.remove(insn);
                                 break;

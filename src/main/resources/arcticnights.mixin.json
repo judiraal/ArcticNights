@@ -12,7 +12,9 @@
     "minecraft.ChunkStatusTasksMixin",
     "minecraft.Climate$SamplerMixin",
     "minecraft.DaylightDetectorBlockMixin",
-    "minecraft.LevelChunkMixin"
+    "minecraft.LevelChunkMixin",
+    "minecraft.LocalMobCapCalculatorMixin",
+    "minecraft.NaturalSpawnerMixin"
   ],
   "minVersion": "0.8",
   "client": [

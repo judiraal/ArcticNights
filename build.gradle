@@ -43,6 +43,7 @@ base {
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+minecraft.accessTransformers.file rootProject.file('src/main/resources/META-INF/accesstransformer.cfg')
 
 runs {
     configureEach {
@@ -78,13 +79,12 @@ configurations {
 
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
-    implementation "curse.maven:serene-seasons-291874:5753503"
-    implementation "curse.maven:glitchcore-955399:5660740"
-    implementation "maven.modrinth:sodium:mc1.21.1-0.6.5-neoforge"
-    implementation "curse.maven:irisshaders-455508:5957827"
 
-    localRuntime "curse.maven:xaeros-minimap-263420:6012855"
-    localRuntime "curse.maven:xaeros-world-map-317780:5987169"
+    compileOnly "curse.maven:serene-seasons-291874:6182596"
+    compileOnly "curse.maven:glitchcore-955399:5660740"
+    compileOnly "curse.maven:sodium-394468:6211307"
+    compileOnly "curse.maven:irisshaders-455508:6213632"
+    compileOnly "curse.maven:cold-sweat-506194:6176789"
 }
 
 tasks.withType(ProcessResources).configureEach {
