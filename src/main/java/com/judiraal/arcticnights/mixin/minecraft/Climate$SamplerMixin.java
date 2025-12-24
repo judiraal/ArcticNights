@@ -14,6 +14,8 @@ public class Climate$SamplerMixin {
     @Redirect(method = "sample", at = @At(value = "INVOKE", ordinal = 0, target = "net/minecraft/world/level/levelgen/DensityFunction.compute (Lnet/minecraft/world/level/levelgen/DensityFunction$FunctionContext;)D"))
     private double arcticnights$bandedTemperature(DensityFunction instance, DensityFunction.FunctionContext functionContext, @Local(ordinal = 3) int xPos, @Local(ordinal = 5) int zPos) {
         double density = instance.compute(functionContext);
-        return ArcticNightsConfig.bandedTemperature.get() ? Calculations.seasonalClimateTemperature(zPos) + (density / 8) : density;
+        return ArcticNightsConfig.bandedTemperature.getAsBoolean() && ArcticNightsConfig.useLegacyAlgorithm.getAsBoolean()
+                ? Calculations.seasonalClimateTemperature(zPos) + (density / 8)
+                : density;
     }
 }

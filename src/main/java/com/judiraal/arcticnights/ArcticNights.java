@@ -1,6 +1,7 @@
 package com.judiraal.arcticnights;
 
 import com.judiraal.arcticnights.util.ArcticSpawner;
+import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
@@ -44,6 +45,7 @@ public class ArcticNights {
 
     public ArcticNights(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
+        ArcticNightsDensityFunctionTypes.TYPES.register(modEventBus);
     }
 
     @SubscribeEvent

@@ -20,6 +20,7 @@ public class ArcticNightsConfig {
 
     public static ModConfigSpec.IntValue circumferenceBlockDistance;
     public static ModConfigSpec.BooleanValue bandedTemperature;
+    public static ModConfigSpec.BooleanValue useLegacyAlgorithm;
     public static ModConfigSpec.IntValue firstTimeOfDay;
     public static ModConfigSpec.BooleanValue shaderSunPathRotation;
     public static ModConfigSpec.IntValue daysPerSeason;
@@ -31,6 +32,8 @@ public class ArcticNightsConfig {
                 .defineInRange("circumferenceBlockDistance", 40000, 4000, 400000);
         bandedTemperature = builder.comment("Whether temperature-based biome distribution should follow circumference.")
                 .define("bandedTemperature", true);
+        useLegacyAlgorithm = builder.comment("Use the legacy algorithm that relies on sampler mixin.")
+                .define("useLegacyAlgorithm", true);
         firstTimeOfDay = builder.comment("First time of day in game ticks when a new game is started.")
                 .defineInRange("firstTimeOfDay", 1000, 0, 12000);
         shaderSunPathRotation = builder.comment("Enable dynamic sunPathRotation for Iris shaders.")

@@ -14,7 +14,8 @@
     "minecraft.DaylightDetectorBlockMixin",
     "minecraft.LevelChunkMixin",
     "minecraft.LocalMobCapCalculatorMixin",
-    "minecraft.NaturalSpawnerMixin"
+    "minecraft.NaturalSpawnerMixin",
+    "minecraft.NoiseBasedChunkGeneratorMixin"
   ],
   "minVersion": "0.8",
   "client": [
