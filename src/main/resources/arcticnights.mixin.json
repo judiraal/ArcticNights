@@ -15,7 +15,8 @@
     "minecraft.LevelChunkMixin",
     "minecraft.LocalMobCapCalculatorMixin",
     "minecraft.NaturalSpawnerMixin",
-    "minecraft.NoiseBasedChunkGeneratorMixin"
+    "minecraft.NoiseBasedChunkGeneratorMixin",
+    "sereneseasons.RandomUpdateHandlerMixin"
   ],
   "minVersion": "0.8",
   "client": [

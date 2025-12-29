@@ -82,9 +82,9 @@ dependencies {
 
     compileOnly "curse.maven:serene-seasons-291874:6182596"
     compileOnly "curse.maven:glitchcore-955399:5660740"
-    compileOnly "curse.maven:sodium-394468:6211307"
-    compileOnly "curse.maven:irisshaders-455508:6213632"
-    compileOnly "curse.maven:cold-sweat-506194:6176789"
+    compileOnly "curse.maven:sodium-394468:6382651"
+    compileOnly "curse.maven:irisshaders-455508:6661598"
+    compileOnly "curse.maven:cold-sweat-506194:7370192"
 }
 
 tasks.withType(ProcessResources).configureEach {
