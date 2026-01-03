@@ -17,6 +17,7 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MobSpawnSettings;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.storage.ServerLevelData;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -93,5 +94,10 @@ public class ArcticNights {
                 for (var data: event.getSpawnerDataList().toArray()) event.removeSpawnerData((MobSpawnSettings.SpawnerData) data);
             }
         }
+    }
+
+    public static final class Blocks {
+        public static final TagKey<Block> TORNADO_PROTECTED =
+                TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(MOD_ID, "tornado_protected"));
     }
 }

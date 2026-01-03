@@ -8,6 +8,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.IceBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
@@ -15,6 +16,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.neoforge.common.Tags;
+import sereneseasons.api.season.Season;
+import sereneseasons.api.season.SeasonHelper;
 import sereneseasons.config.SeasonsConfig;
 import sereneseasons.init.ModTags;
 import sereneseasons.season.SeasonHooks;
@@ -42,32 +45,63 @@ public final class SnowMeltHandler {
             surfaceState = level.getBlockState(surfacePos);
         }
 
-        final Holder<Biome> biomeHolder = level.getBiome(surfacePos);
-        if (biomeHolder.is(ModTags.Biomes.BLACKLISTED_BIOMES) || biomeHolder.is(Tags.Biomes.IS_CAVE)) return;
-
-        final float temp = SeasonHooks.getBiomeTemperatureInSeason(seasonProperties.subSeason(), biomeHolder, surfacePos);
-        if (temp < -0.15F) return;
-        if (temp < 0.15F) {
-            final BlockPos orgPos = level.getHeightmapPos(Heightmap.Types.WORLD_SURFACE_WG, surfacePos);
-            if (surfacePos.getY() <= orgPos.getY()) return;
-        }
-
+        if (!shouldMeltAt(level, surfacePos, seasonProperties.subSeason())) return;
         doMelt(surfaceState, level, surfacePos);
-
         tryMeltDown(level, surfacePos, 1);
     }
 
-    private static void tryMeltDown(ServerLevel level, BlockPos.MutableBlockPos pos, int attempt) {
-        if (level.random.nextFloat() < 0.3F) {
-            int yTopExclusive = pos.getY();
-            int down = level.random.nextInt(attempt*8) + 1;
-            pos.move(Direction.DOWN, down);
-            if (!level.isLoaded(pos)) return;
-            if (findFirstTopSnow(level, pos, yTopExclusive) && level.getBrightness(LightLayer.SKY, pos.above()) > 0)
-                doMelt(level.getBlockState(pos), level, pos);
-            else
-                tryMeltDown(level, pos.setY(yTopExclusive - down), attempt + 1);
+    private static final java.util.WeakHashMap<ServerLevel, SeasonCache> SEASON_CACHE = new java.util.WeakHashMap<>();
+
+    public static Season.SubSeason getSubSeason(ServerLevel level) {
+        final long bucket = level.getGameTime() / 20L;
+        SeasonCache c = SEASON_CACHE.get(level);
+        if (c == null || c.bucket != bucket) {
+            final var state = SeasonHelper.getSeasonState(level);
+            final Season.SubSeason ss = state.getSubSeason(); // typical SS API
+            c = new SeasonCache(bucket, ss);
+            SEASON_CACHE.put(level, c);
         }
+        return c.subSeason;
+    }
+
+    private static final class SeasonCache {
+        final long bucket;
+        final Season.SubSeason subSeason;
+        SeasonCache(long bucket, Season.SubSeason subSeason) {
+            this.bucket = bucket;
+            this.subSeason = subSeason;
+        }
+    }
+
+    public static boolean shouldMeltAt(ServerLevel level, BlockPos pos) {
+        return shouldMeltAt(level, pos, getSubSeason(level));
+    }
+
+    public static boolean shouldMeltAt(ServerLevel level, BlockPos pos, Season.SubSeason subSeason) {
+        final Holder<Biome> biomeHolder = level.getBiome(pos);
+        if (biomeHolder.is(Tags.Biomes.IS_CAVE)) return false;
+        if (biomeHolder.is(ModTags.Biomes.BLACKLISTED_BIOMES) && !biomeHolder.is(Biomes.RIVER)) return false;
+
+        final float temp = SeasonHooks.getBiomeTemperatureInSeason(subSeason, biomeHolder, pos);
+        if (temp < -0.15F) return false;
+        if (temp < 0.15F) {
+            final int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, pos.getX(), pos.getZ());
+            return pos.getY() > surfaceY;
+        }
+
+        return true;
+    }
+
+    private static void tryMeltDown(ServerLevel level, BlockPos.MutableBlockPos pos, int attempt) {
+        if (attempt > 4 || level.random.nextFloat() < 0.3F) return;
+        int yTopExclusive = pos.getY();
+        int down = level.random.nextInt(attempt*8) + 1;
+        pos.move(Direction.DOWN, down);
+        if (!level.isLoaded(pos)) return;
+        if (findFirstTopSnow(level, pos, yTopExclusive) && level.getBrightness(LightLayer.SKY, pos.above()) > 0)
+            doMelt(level.getBlockState(pos), level, pos);
+        else
+            tryMeltDown(level, pos.setY(yTopExclusive - down), attempt + 1);
     }
 
     private static boolean isSnow(BlockState blockState) {
@@ -85,7 +119,7 @@ public final class SnowMeltHandler {
         return true;
     }
 
-    private static void doMelt(BlockState state, ServerLevel level, BlockPos pos) {
+    public static void doMelt(BlockState state, ServerLevel level, BlockPos pos) {
         if (state.is(Blocks.SNOW)) {
             int layers = state.getValue(SnowLayerBlock.LAYERS);
             if (layers <= 1) {

@@ -27,6 +27,7 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.ConfigValue<List<? extends Integer>> structureDenyRange;
     public static ModConfigSpec.BooleanValue arcticSpawning;
     public static ModConfigSpec.BooleanValue fullMelting;
+    public static ModConfigSpec.BooleanValue alternativeTornadoStrengthGrabbing;
 
     private ArcticNightsConfig(final ModConfigSpec.Builder builder) {
         circumferenceBlockDistance = builder.comment("The distance in blocks for a full circumference, i.e. double the distance between two poles.")
@@ -54,8 +55,10 @@ public class ArcticNightsConfig {
                 });
         arcticSpawning = builder.comment("Enable tag-based seasonal spawning rules, e.g. require cold for undead, require heat for creepers, autumn for spiders, etc.")
                 .define("arcticSpawning", false);
-        fullMelting = builder.comment("Enable alternative snow melting algorithm that can melt full snow blocks left by custom weather mods, requires Serene Seasons to work.")
+        fullMelting = builder.comment("Enable alternative snow melting algorithm that can melt full snow blocks left by other mods, requires Serene Seasons to work.")
                 .define("fullMelting", false);
+        alternativeTornadoStrengthGrabbing = builder.comment("Enable alternative tornado strength grabbing, limiting debug output, optimizing performance and allowing more blocks to grab.")
+                .define("alternativeTornadoStrengthGrabbing", false);
         builder.build();
     }
 }

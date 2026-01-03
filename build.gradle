@@ -85,6 +85,8 @@ dependencies {
     compileOnly "curse.maven:sodium-394468:6382651"
     compileOnly "curse.maven:irisshaders-455508:6661598"
     compileOnly "curse.maven:cold-sweat-506194:7370192"
+    compileOnly "curse.maven:weather-storms-tornadoes-237746:6926103"
+    compileOnly "curse.maven:minecolonies-245506:7384176"
 }
 
 tasks.withType(ProcessResources).configureEach {

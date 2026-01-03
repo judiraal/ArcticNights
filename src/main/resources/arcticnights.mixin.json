@@ -16,7 +16,10 @@
     "minecraft.LocalMobCapCalculatorMixin",
     "minecraft.NaturalSpawnerMixin",
     "minecraft.NoiseBasedChunkGeneratorMixin",
-    "sereneseasons.RandomUpdateHandlerMixin"
+    "minecraft.SnowLayerBlockMixin",
+    "sereneseasons.RandomUpdateHandlerMixin",
+    "weather2.TornadoHelperMixin",
+    "weather2.WeatherCommandMixin"
   ],
   "minVersion": "0.8",
   "client": [
