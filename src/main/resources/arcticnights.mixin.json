@@ -10,6 +10,7 @@
     "iris.ShadowRendererMixin",
     "iris.WorldTimeUniformsMixin",
     "minecraft.ChunkStatusTasksMixin",
+    "minecraft.ChunkGeneratorMixin",
     "minecraft.Climate$SamplerMixin",
     "minecraft.DaylightDetectorBlockMixin",
     "minecraft.LevelChunkMixin",

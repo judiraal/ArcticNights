@@ -25,6 +25,7 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.BooleanValue shaderSunPathRotation;
     public static ModConfigSpec.IntValue daysPerSeason;
     public static ModConfigSpec.ConfigValue<List<? extends Integer>> structureDenyRange;
+    public static ModConfigSpec.ConfigValue<List<? extends String>> structureDenyAllowlist;
     public static ModConfigSpec.BooleanValue arcticSpawning;
     public static ModConfigSpec.BooleanValue fullMelting;
     public static ModConfigSpec.BooleanValue alternativeTornadoStrengthGrabbing;
@@ -53,6 +54,11 @@ public class ArcticNightsConfig {
                     }
                     return false;
                 });
+        structureDenyAllowlist = builder.comment("Structure ids allowed to generate inside structureDenyRange.",
+                        "Use this for ruin-like wilderness structures while keeping villages and civilization excluded.",
+                        "Supports exact ids like \"structory:graveyard\" and simple wildcard patterns like \"terralith:rubble_*\".",
+                        "Default: []")
+                .defineListAllowEmpty("structureDenyAllowlist", List::of, () -> "", value -> value instanceof String);
         arcticSpawning = builder.comment("Enable tag-based seasonal spawning rules, e.g. require cold for undead, require heat for creepers, autumn for spiders, etc.")
                 .define("arcticSpawning", false);
         fullMelting = builder.comment("Enable alternative snow melting algorithm that can melt full snow blocks left by other mods, requires Serene Seasons to work.")
