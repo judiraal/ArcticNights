@@ -11,8 +11,9 @@ import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.biome.Biome;
 import sereneseasons.api.season.ISeasonState;
 import sereneseasons.api.season.SeasonHelper;
@@ -29,6 +30,8 @@ public class ArcticSpawner {
             TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("arcticnights", "require_cold"));
     private static final TagKey<EntityType<?>> REQUIRE_HOT =
             TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("arcticnights", "require_hot"));
+    private static final TagKey<EntityType<?>> REQUIRE_AUTUMN_OR_DEEP =
+            TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("arcticnights", "require_autumn_or_deep"));
     private static final Long2FloatLinkedOpenHashMap TEMPERATURE_CACHE = new Long2FloatLinkedOpenHashMap(1024, 0.25F) {
         @Override
         protected void rehash(int newSize) {
@@ -59,7 +62,7 @@ public class ArcticSpawner {
         return t;
     }
 
-    private static final float[] subSeasonSpiderFactor = new float[] {0, 0, 0, 0, 0, 0, 0.5F, 1.5F, 3, 2, 1, 0.5F};
+    private static final float[] subSeasonSpiderFactor = new float[] {0, 0, 0, 0, 0, 0, 2, 3, 2, 1, 1, 1};
 
     public static float spawnFactor(EntityType<?> entityType, BlockPos pos, ServerLevel level) {
         if (entityType.is(REQUIRE_COLD)) {
@@ -68,11 +71,15 @@ public class ArcticSpawner {
             var temp = getTemperature(level, biome, pos);
             if (temp > 0.15F) return 0.0F;
             return Mth.lerp(getCaveFactor(level, pos)/2, -5F*(temp-0.1F)+1F, 1.0F);
-        } else if (entityType == EntityType.SPIDER && ArcticNights.SERENE_SEASONS) {
-            var basicFactor = subSeasonSpiderFactor[SeasonsCompat.getSeason(level).getSubSeason().ordinal()];
-            return Mth.lerp(getCaveFactor(level, pos), basicFactor, 1.0F);
+        } else if (entityType.is(REQUIRE_AUTUMN_OR_DEEP)) {
+            var seasonalFactor = ArcticNights.SERENE_SEASONS
+                    ? subSeasonSpiderFactor[SeasonsCompat.getSeason(level).getSubSeason().ordinal()]
+                    : 0.0F;
+            var deepFactor = pos.getY() < 32 ? 1.0F : 0.0F;
+            return Math.max(seasonalFactor, deepFactor);
         } else if (entityType.is(REQUIRE_HOT)) {
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
+            if (entityType == EntityType.CREEPER && isNearUndergroundLavaLake(level, pos)) return 1.0F;
             if (biome.is(COLD)) return 0.0F;
             var temp = getTemperature(level, biome, pos);
             if (temp < 0.7F) return 0.0F;
@@ -85,6 +92,22 @@ public class ArcticSpawner {
         if (pos.getY() > 64) return 0;
         if (pos.getY() < 32) return 0.8F;
         return (float)(15-level.getBrightness(LightLayer.SKY, pos))/15F*0.8F;
+    }
+
+    private static boolean isNearUndergroundLavaLake(ServerLevel level, BlockPos pos) {
+        if (pos.getY() >= 48) return false;
+        int lavaSources = 0;
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int x = pos.getX() - 5; x <= pos.getX() + 5; x++) {
+            for (int y = Math.max(level.getMinBuildHeight(), pos.getY() - 4); y <= Math.min(level.getMaxBuildHeight() - 1, pos.getY() + 4); y++) {
+                for (int z = pos.getZ() - 5; z <= pos.getZ() + 5; z++) {
+                    cursor.set(x, y, z);
+                    var fluid = level.getFluidState(cursor);
+                    if (fluid.is(Fluids.LAVA) && fluid.isSource() && ++lavaSources > 32) return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static class SeasonsCompat {
