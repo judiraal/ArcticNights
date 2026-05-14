@@ -29,6 +29,8 @@
     "minecraft.FogRendererMixin",
     "minecraft.ItemPropertiesMixin",
     "minecraft.LevelMixin",
-    "minecraft.LevelRendererMixin"
+    "minecraft.LevelRendererMixin",
+    "weather2.ClientWeatherHelperMixin",
+    "weather2.SceneEnhancerMixin"
   ]
 }
