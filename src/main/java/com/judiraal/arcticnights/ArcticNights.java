@@ -63,7 +63,7 @@ public class ArcticNights {
         if (ArcticNightsConfig.arcticSpawning.isFalse()) return;
         if (event.getEntity().level() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
             var factor = ArcticSpawner.spawnFactor(event.getEntity().getType(), event.getEntity().blockPosition(), level);
-            if (factor < 1.0F) event.setSize((int)(event.getSize() * factor));
+            if (factor > 0.0F && factor < 1.0F) event.setSize(Math.max(1, (int)(event.getSize() * factor)));
             else if (factor > 1.0F) {
                 var correction = Mth.frac(factor) / (int)factor;
                 event.setSize((int)(event.getSize() * correction));
@@ -82,6 +82,10 @@ public class ArcticNights {
                 totalWeight += data.getWeight().asInt();
                 var factor = ArcticSpawner.spawnFactor(data.type, event.getPos(), level);
                 if (factor == 0.0F) {
+                    event.removeSpawnerData(data);
+                    removedWeight += data.getWeight().asInt();
+                }
+                else if (factor < 1.0F && event.getLevel().getRandom().nextFloat() > factor) {
                     event.removeSpawnerData(data);
                     removedWeight += data.getWeight().asInt();
                 }

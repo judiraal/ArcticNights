@@ -21,7 +21,12 @@ public class NaturalSpawnerMixin {
         if (ArcticNightsConfig.arcticSpawning.isFalse()) return false;
         if (mob.level() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
             var factor = ArcticSpawner.spawnFactor(mob.getType(), mob.blockPosition(), level);
-            if (factor > 1F) {
+            if (factor > 0.0F && factor < 0.5F) {
+                var entityTypeCounter = ((LocalMobCapExtender)calculator).arcticnights$entityTypeCounter();
+                var count = entityTypeCounter.getOrDefault(mob.getType(), 0F);
+                if (count >= 1F) return true;
+                entityTypeCounter.put(mob.getType(), count + 1F);
+            } else if (factor > 1F) {
                 var entityTypeCounter = ((LocalMobCapExtender)calculator).arcticnights$entityTypeCounter();
                 var count = entityTypeCounter.getOrDefault(mob.getType(), 0F);
                 count += 1F / factor;
