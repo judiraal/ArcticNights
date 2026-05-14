@@ -1,5 +1,6 @@
 package com.judiraal.arcticnights;
 
+import com.judiraal.arcticnights.command.ArcticNightsCommands;
 import com.judiraal.arcticnights.util.ArcticSpawner;
 import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
 import com.mojang.logging.LogUtils;
@@ -30,6 +31,7 @@ import net.neoforged.neoforge.common.data.internal.NeoForgeBiomeTagsProvider;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.SpawnClusterSizeEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.slf4j.Logger;
 
 @Mod(ArcticNights.MOD_ID)
@@ -56,6 +58,11 @@ public class ArcticNights {
                 serverLevel.getLevelData() instanceof ServerLevelData data) {
             data.setDayTime(ArcticNightsConfig.firstTimeOfDay.get());
         }
+    }
+
+    @SubscribeEvent
+    public static void onRegisterCommands(RegisterCommandsEvent event) {
+        ArcticNightsCommands.register(event.getDispatcher());
     }
 
     @SubscribeEvent

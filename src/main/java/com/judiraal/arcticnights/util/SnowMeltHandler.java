@@ -20,7 +20,6 @@ import sereneseasons.api.season.Season;
 import sereneseasons.api.season.SeasonHelper;
 import sereneseasons.config.SeasonsConfig;
 import sereneseasons.init.ModTags;
-import sereneseasons.season.SeasonHooks;
 
 public final class SnowMeltHandler {
     private SnowMeltHandler() {}
@@ -82,9 +81,10 @@ public final class SnowMeltHandler {
         if (biomeHolder.is(Tags.Biomes.IS_CAVE)) return false;
         if (biomeHolder.is(ModTags.Biomes.BLACKLISTED_BIOMES) && !biomeHolder.is(Biomes.RIVER)) return false;
 
-        final float temp = SeasonHooks.getBiomeTemperatureInSeason(subSeason, biomeHolder, pos);
-        if (temp < -0.15F) return false;
-        if (temp < 0.15F) {
+        final float temp = ClimateService.baseMinecraftTemperature(level, biomeHolder, pos);
+        ClimateSnapshot.SnowBehavior snowBehavior = ClimateService.snowBehavior(temp);
+        if (snowBehavior == ClimateSnapshot.SnowBehavior.PERSISTENT) return false;
+        if (snowBehavior == ClimateSnapshot.SnowBehavior.TRANSITIONAL_SURFACE) {
             final int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, pos.getX(), pos.getZ());
             return pos.getY() > surfaceY;
         }

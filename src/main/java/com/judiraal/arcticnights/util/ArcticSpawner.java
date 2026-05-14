@@ -35,6 +35,8 @@ public class ArcticSpawner {
             TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath("c", "is_cold"));
     private static final TagKey<Biome> HOT =
             TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath("c", "is_hot"));
+    private static final TagKey<Biome> WITCH_WETLANDS =
+            TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(ArcticNights.MOD_ID, "witch_wetlands"));
     private static final TagKey<EntityType<?>> REQUIRE_COLD =
             TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("arcticnights", "require_cold"));
     private static final TagKey<EntityType<?>> REQUIRE_HOT =
@@ -70,23 +72,22 @@ public class ArcticSpawner {
         if (!Float.isNaN(t)) return t;
         if (TEMPERATURE_CACHE.size() == 1024) TEMPERATURE_CACHE.removeFirstFloat();
         if (biome == null) biome = level.getBiome(pos);
-        if (ArcticNights.SERENE_SEASONS) {
-            t = SeasonsCompat.getTemperature(level, biome, pos);
-        } else {
-            t = biome.value().getTemperature(pos);
-        }
-        if (isRainCooling(level, biome, pos)) t = (t-0.3F)*2;
+        t = ClimateService.spawnTemperature(level, biome, pos);
         TEMPERATURE_CACHE.put(p, t);
         return t;
     }
 
     private static boolean isRainCooling(ServerLevel level, Holder<Biome> biome, BlockPos pos) {
-        return level.isRaining() && level.getBrightness(LightLayer.SKY, pos) != 0 && biome.value().hasPrecipitation();
+        return ClimateService.isRainCooling(level, biome, pos);
     }
 
     private static final float[] subSeasonSpiderFactor = new float[] {0, 0, 0, 0, 0, 0, 2, 3, 2, 1, 1, 1};
 
     public static float spawnFactor(EntityType<?> entityType, BlockPos pos, ServerLevel level) {
+        if (entityType == EntityType.WITCH) {
+            var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
+            return biome.is(WITCH_WETLANDS) ? 1.0F : 0.0F;
+        }
         if (entityType.is(REQUIRE_COLD)) {
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
             if (biome.is(HOT)) return 0.0F;
