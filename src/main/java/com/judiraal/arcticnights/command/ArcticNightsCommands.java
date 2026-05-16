@@ -117,13 +117,16 @@ public final class ArcticNightsCommands {
 
     private static int auditClimate(CommandContext<CommandSourceStack> context) {
         try {
-            ClimateAuditReporter.ClimateAuditResult result = ClimateAuditReporter.audit(context.getSource().getServer());
+            ClimateAuditReporter.ClimateAuditResult climate = ClimateAuditReporter.audit(context.getSource().getServer());
+            ClimateAuditReporter.SpawnMatrixResult spawns = ClimateAuditReporter.auditSpawnMatrix(context.getSource().getServer());
             context.getSource().sendSuccess(() -> Component.literal("Arctic Nights climate audit complete: "
-                    + result.report().biomeCount() + " biome(s), "
-                    + result.report().rowCount() + " sample row(s), "
-                    + result.report().flaggedRowCount() + " flagged row(s). Wrote "
-                    + result.markdown() + " and " + result.csv()), true);
-            return result.report().flaggedRowCount();
+                    + climate.report().biomeCount() + " biome(s), "
+                    + climate.report().rowCount() + " climate row(s), "
+                    + climate.report().flaggedRowCount() + " runtime flagged row(s), plus "
+                    + spawns.report().rowCount() + " spawn row(s). Wrote "
+                    + climate.markdown() + ", " + climate.csv() + ", "
+                    + spawns.markdown() + " and " + spawns.csv()), true);
+            return climate.report().flaggedRowCount();
         } catch (IOException e) {
             ArcticNights.LOGGER.warn("Unable to write Arctic Nights climate audit", e);
             context.getSource().sendFailure(Component.literal("Arctic Nights climate audit failed: " + e.getMessage()));

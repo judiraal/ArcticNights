@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.judiraal.arcticnights.ArcticNights;
+import com.judiraal.arcticnights.ArcticNightsConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -40,6 +41,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
@@ -47,18 +49,28 @@ import java.util.stream.Collectors;
 public final class ClimateAuditReporter {
     private static final ResourceLocation SOURCE_ORDER = ResourceLocation.fromNamespaceAndPath("iwjei", "source_order/phase_0_2.json");
     private static final List<Sample> SAMPLES = List.of(
-            new Sample("start_surface", new BlockPos(0, 64, 0), true, 0.0F),
-            new Sample("start_mountain", new BlockPos(0, 128, 0), true, 0.0F),
-            new Sample("start_cave", new BlockPos(0, 32, 0), false, 0.8F)
+            new Sample("surface", 64, true, 0.0F),
+            new Sample("mountain", 128, true, 0.0F),
+            new Sample("cave", 32, false, 0.8F)
     );
+    private static final List<TimeSample> TIME_SAMPLES = List.of(
+            new TimeSample("dawn", 0L),
+            new TimeSample("noon", 6_000L),
+            new TimeSample("dusk", 12_000L),
+            new TimeSample("midnight", 18_000L)
+    );
+    private static final TimeSample SPAWN_TIME = new TimeSample("midnight", 18_000L);
     private static final List<WeatherSample> WEATHER_SAMPLES = List.of(
-            new WeatherSample("clear", false),
-            new WeatherSample("rain", true)
+            new WeatherSample("clear", ClimateSnapshot.WeatherState.CLEAR),
+            new WeatherSample("rain", ClimateSnapshot.WeatherState.RAIN),
+            new WeatherSample("thunder", ClimateSnapshot.WeatherState.THUNDER)
     );
-    private static final Sample SPAWN_SURFACE_SAMPLE = new Sample("surface", new BlockPos(0, 64, 0), true, 0.0F);
-    private static final float UNDEAD_COLD_THRESHOLD = 3.0F / 25.0F;
+    private static final Sample SPAWN_SURFACE_SAMPLE = new Sample("surface", 64, true, 0.0F);
+    private static final float UNDEAD_COLD_THRESHOLD = 0.0F / 25.0F;
     private static final float UNDEAD_COLD_RAMP = 0.48F;
-    private static final float RAIN_STRAY_UNDEAD_FACTOR = 0.12F;
+    private static final float RAIN_STRAY_UNDEAD_FACTOR = 0.10F;
+    private static final float RAIN_STRAY_UNDEAD_START = 3.0F / 25.0F;
+    private static final float RAIN_STRAY_UNDEAD_FULL = -3.0F / 25.0F;
     private static final float MIN_MEANINGFUL_SPAWN_FACTOR = 0.08F;
     private static final float MIN_MEANINGFUL_SPIDER_FACTOR = 0.20F;
     private static final float CREEPER_HEAT_START = 20.0F / 25.0F;
@@ -94,11 +106,17 @@ public final class ClimateAuditReporter {
                     SourceOrderTier tier = sourceOrder.tierForBiome(biomeId, tags);
                     if (tier == null || tier.phase() > 2) return;
                     String archetype = archetype(biomeId, tags);
+                    List<Sample> samples = relevantSamples(archetype);
                     for (SeasonSample season : seasonSamples()) {
                         for (WeatherSample weather : WEATHER_SAMPLES) {
-                            for (Sample sample : relevantSamples(archetype)) {
-                                ClimateSnapshot snapshot = ClimateService.auditSnapshot(level, holder, sample.pos(), sample.exposedToSky(), season.subSeason(), weather.raining());
-                                rows.add(row(biomeId, tags, tier, archetype, season, weather, sample, snapshot, coldSweat));
+                            for (TimeSample time : TIME_SAMPLES) {
+                                for (LatitudeSample latitude : latitudeSamples()) {
+                                    for (Sample sample : samples) {
+                                        BlockPos pos = sample.pos(latitude);
+                                        ClimateSnapshot snapshot = ClimateService.auditSnapshot(level, holder, pos, sample.exposedToSky(), season.subSeason(), weather.weatherState(), time.dayTime());
+                                        rows.add(row(biomeId, tags, tier, archetype, season, weather, time, latitude, sample, snapshot, coldSweat));
+                                    }
+                                }
                             }
                         }
                     }
@@ -109,10 +127,14 @@ public final class ClimateAuditReporter {
                 elapsedMillis(started),
                 distinctBiomes(rows),
                 rows.size(),
-                (int) rows.stream().filter(row -> !row.flags().isEmpty()).count(),
+                flagRowCount(rows, ClimateAuditReporter::isPrimaryFlag),
+                flagRowCount(rows, ClimateAuditReporter::isReferenceFlag),
+                flagRowCount(rows, ClimateAuditReporter::isHypotheticalLatitudeFlag),
                 countBy(rows, row -> row.phase() == null ? "unassigned" : "phase_" + row.phase()),
                 countBy(rows, ClimateAuditRow::archetype),
-                flagCounts(rows),
+                flagCounts(rows, ClimateAuditReporter::isPrimaryFlag),
+                flagCounts(rows, ClimateAuditReporter::isReferenceFlag),
+                flagCounts(rows, ClimateAuditReporter::isHypotheticalLatitudeFlag),
                 rows
         );
 
@@ -152,8 +174,11 @@ public final class ClimateAuditReporter {
                     String archetype = archetype(biomeId, tags);
                     for (SeasonSample season : allSubSeasonSamples()) {
                         for (WeatherSample weather : WEATHER_SAMPLES) {
-                            ClimateSnapshot snapshot = ClimateService.auditSnapshot(level, holder, SPAWN_SURFACE_SAMPLE.pos(), true, season.subSeason(), weather.raining());
-                            rows.add(spawnRow(biomeId, tags, holder, tier, archetype, season, weather, snapshot, phaseEntityGates));
+                            for (LatitudeSample latitude : latitudeSamples()) {
+                                BlockPos pos = SPAWN_SURFACE_SAMPLE.pos(latitude);
+                                ClimateSnapshot snapshot = ClimateService.auditSnapshot(level, holder, pos, true, season.subSeason(), weather.weatherState(), SPAWN_TIME.dayTime());
+                                rows.add(spawnRow(biomeId, tags, holder, tier, archetype, season, weather, latitude, SPAWN_SURFACE_SAMPLE, SPAWN_TIME, snapshot, phaseEntityGates));
+                            }
                         }
                     }
                 });
@@ -187,6 +212,18 @@ public final class ClimateAuditReporter {
         return SAMPLES;
     }
 
+    private static List<LatitudeSample> latitudeSamples() {
+        int equator = ArcticNightsConfig.circumferenceBlockDistance.get() / 8;
+        int middle = equator / 2;
+        return List.of(
+                new LatitudeSample("north_pole", -equator),
+                new LatitudeSample("cold_band", -middle),
+                new LatitudeSample("temperate_start", 0),
+                new LatitudeSample("warm_band", middle),
+                new LatitudeSample("equator", equator)
+        );
+    }
+
     private static List<SeasonSample> seasonSamples() {
         if (!com.judiraal.arcticnights.ArcticNights.SERENE_SEASONS) {
             return List.of(new SeasonSample("current", null));
@@ -211,9 +248,10 @@ public final class ClimateAuditReporter {
         return List.copyOf(samples);
     }
 
-    private static ClimateAuditRow row(String biomeId, List<String> tags, SourceOrderTier tier, String archetype, SeasonSample season, WeatherSample weather, Sample sample, ClimateSnapshot snapshot, ColdSweatOutdoorConfig coldSweat) {
+    private static ClimateAuditRow row(String biomeId, List<String> tags, SourceOrderTier tier, String archetype, SeasonSample season, WeatherSample weather, TimeSample time, LatitudeSample latitude, Sample sample, ClimateSnapshot snapshot, ColdSweatOutdoorConfig coldSweat) {
         OutdoorTemperatureRangeC coldSweatOutdoor = coldSweat.outdoorC(biomeId, season.name(), snapshot.rainCooling());
         List<String> flags = flags(tags, archetype, season.name(), weather.name(), sample.exposedToSky(), snapshot, coldSweatOutdoor);
+        BlockPos pos = sample.pos(latitude);
         return new ClimateAuditRow(
                 biomeId,
                 tier.phase(),
@@ -221,10 +259,12 @@ public final class ClimateAuditReporter {
                 archetype,
                 season.name(),
                 weather.name(),
+                time.name(),
+                latitude.name(),
                 sample.name(),
-                sample.pos().getX(),
-                sample.pos().getY(),
-                sample.pos().getZ(),
+                pos.getX(),
+                pos.getY(),
+                pos.getZ(),
                 sample.exposedToSky(),
                 climateTags(tags),
                 snapshot.minecraftTemperature(),
@@ -241,11 +281,12 @@ public final class ClimateAuditReporter {
         );
     }
 
-    private static SpawnMatrixRow spawnRow(String biomeId, List<String> tags, Holder<Biome> biome, SourceOrderTier tier, String archetype, SeasonSample season, WeatherSample weather, ClimateSnapshot snapshot, PhaseEntityGateConfig phaseEntityGates) {
+    private static SpawnMatrixRow spawnRow(String biomeId, List<String> tags, Holder<Biome> biome, SourceOrderTier tier, String archetype, SeasonSample season, WeatherSample weather, LatitudeSample latitude, Sample sample, TimeSample time, ClimateSnapshot snapshot, PhaseEntityGateConfig phaseEntityGates) {
         float spawnTemperature = spawnTemperature(snapshot);
         float undeadFactor = undeadFactor(tags, spawnTemperature, snapshot.clearOutdoorMinecraftTemperature(), 0.0F, snapshot.rainCooling());
         float creeperFactor = creeperFactor(tags, snapshot, 0.0F);
         float spiderFactor = spiderFactor(season.subSeason(), snapshot, 0.0F);
+        BlockPos pos = sample.pos(latitude);
         List<SpawnEntry> baseEntries = baseMonsterEntries(biome);
         List<SpawnEntry> expectedEntries = new ArrayList<>();
         List<String> removedEntries = new ArrayList<>();
@@ -277,6 +318,12 @@ public final class ClimateAuditReporter {
                 archetype,
                 season.name(),
                 weather.name(),
+                latitude.name(),
+                sample.name(),
+                time.name(),
+                pos.getX(),
+                pos.getY(),
+                pos.getZ(),
                 snapshot.minecraftTemperature(),
                 snapshot.estimatedCelsius(),
                 spawnTemperature,
@@ -337,10 +384,14 @@ public final class ClimateAuditReporter {
 
     private static float undeadFactor(List<String> tags, float spawnTemperature, float dryMinecraftTemperature, float caveFactor, boolean rainCooling) {
         if (tags.contains("c:is_hot") || tags.contains("c:is_hot/overworld")) return 0.0F;
-        if (rainCooling && dryMinecraftTemperature > UNDEAD_COLD_THRESHOLD) return RAIN_STRAY_UNDEAD_FACTOR;
+        float rainStrayFactor = rainCooling && dryMinecraftTemperature > UNDEAD_COLD_THRESHOLD
+                ? coldRainUndeadFactor(spawnTemperature)
+                : 0.0F;
+        if (rainStrayFactor < MIN_MEANINGFUL_SPAWN_FACTOR) rainStrayFactor = 0.0F;
         float coldSeverity = Mth.clamp((UNDEAD_COLD_THRESHOLD - spawnTemperature) / UNDEAD_COLD_RAMP, 0.0F, 1.0F);
         float factor = Mth.lerp(caveFactor / 2.0F, coldSeverity * coldSeverity * 2.2F, 1.0F);
-        return factor < MIN_MEANINGFUL_SPAWN_FACTOR ? 0.0F : factor;
+        if (factor < MIN_MEANINGFUL_SPAWN_FACTOR) factor = 0.0F;
+        return Math.max(factor, rainStrayFactor);
     }
 
     private static float creeperFactor(List<String> tags, ClimateSnapshot snapshot, float caveFactor) {
@@ -379,11 +430,18 @@ public final class ClimateAuditReporter {
         return clamped * clamped * (3.0F - 2.0F * clamped);
     }
 
+    private static float coldRainUndeadFactor(float outdoorMinecraftTemperature) {
+        if (outdoorMinecraftTemperature >= RAIN_STRAY_UNDEAD_START) return 0.0F;
+        float severity = (RAIN_STRAY_UNDEAD_START - outdoorMinecraftTemperature)
+                / (RAIN_STRAY_UNDEAD_START - RAIN_STRAY_UNDEAD_FULL);
+        return RAIN_STRAY_UNDEAD_FACTOR * smoothStep(severity);
+    }
+
     private static float spawnFactor(EntityType<?> type, List<String> tags, float spawnTemperature, ClimateSnapshot snapshot, Season.SubSeason subSeason, float caveFactor) {
         if (type == EntityType.WITCH) return tags.contains("arcticnights:witch_wetlands") ? 1.0F : 0.0F;
-        if (type.is(EntityTypeTags.UNDEAD)) return undeadFactor(tags, spawnTemperature, snapshot.clearOutdoorMinecraftTemperature(), caveFactor, snapshot.rainCooling());
-        if (type == EntityType.CREEPER) return creeperFactor(tags, snapshot, caveFactor);
-        if (type == EntityType.SPIDER) return spiderFactor(subSeason, snapshot, caveFactor);
+        if (type.is(ArcticSpawner.REQUIRE_COLD)) return undeadFactor(tags, spawnTemperature, snapshot.clearOutdoorMinecraftTemperature(), caveFactor, snapshot.rainCooling());
+        if (type.is(ArcticSpawner.REQUIRE_HOT)) return creeperFactor(tags, snapshot, caveFactor);
+        if (type.is(ArcticSpawner.REQUIRE_AUTUMN_OR_DEEP)) return spiderFactor(subSeason, snapshot, caveFactor);
         return 1.0F;
     }
 
@@ -536,12 +594,32 @@ public final class ClimateAuditReporter {
         return (int) rows.stream().map(SpawnMatrixRow::biome).distinct().count();
     }
 
-    private static Map<String, Long> flagCounts(List<ClimateAuditRow> rows) {
+    private static int flagRowCount(List<ClimateAuditRow> rows, Predicate<String> predicate) {
+        return (int) rows.stream()
+                .filter(row -> row.flags().stream().anyMatch(predicate))
+                .count();
+    }
+
+    private static Map<String, Long> flagCounts(List<ClimateAuditRow> rows, Predicate<String> predicate) {
         Map<String, Long> counts = new TreeMap<>();
         for (ClimateAuditRow row : rows) {
-            for (String flag : row.flags()) counts.merge(flag, 1L, Long::sum);
+            for (String flag : row.flags()) {
+                if (predicate.test(flag)) counts.merge(flag, 1L, Long::sum);
+            }
         }
         return counts;
+    }
+
+    private static boolean isPrimaryFlag(String flag) {
+        return !isReferenceFlag(flag) && !isHypotheticalLatitudeFlag(flag);
+    }
+
+    private static boolean isReferenceFlag(String flag) {
+        return flag.startsWith("cold_sweat_config_");
+    }
+
+    private static boolean isHypotheticalLatitudeFlag(String flag) {
+        return "warm_temperate_winter".equals(flag) || "hot_cold_archetype_summer".equals(flag);
     }
 
     private static <T> Map<String, Long> countBy(List<T> rows, Function<T, String> classifier) {
@@ -559,27 +637,37 @@ public final class ClimateAuditReporter {
         sb.append("- Duration: ").append(report.durationMillis()).append(" ms\n");
         sb.append("- Biomes: ").append(report.biomeCount()).append('\n');
         sb.append("- Rows: ").append(report.rowCount()).append('\n');
-        sb.append("- Flagged Rows: ").append(report.flaggedRowCount()).append("\n\n");
+        sb.append("- Runtime/Classification Flagged Rows: ").append(report.flaggedRowCount()).append('\n');
+        sb.append("- Cold Sweat Static Reference Warning Rows: ").append(report.referenceWarningRowCount()).append('\n');
+        sb.append("- Hypothetical Latitude Warning Rows: ").append(report.hypotheticalWarningRowCount()).append("\n\n");
         appendSummary(sb, "Rows By Phase", report.rowsByPhase());
         appendSummary(sb, "Rows By Archetype", report.rowsByArchetype());
-        appendSummary(sb, "Flags", report.flags());
-        sb.append("Cold Sweat config columns are the static config values before the Arctic Nights runtime outdoor-climate modifier. Use `Est C` for the authoritative Arctic Nights outdoor temperature used by snow, spawn ecology, and the live Cold Sweat modifier.\n\n");
-        sb.append("## Flagged Rows\n\n");
+        appendSummary(sb, "Runtime And Classification Flags", report.flags());
+        appendSummary(sb, "Cold Sweat Static Reference Warnings", report.referenceWarnings());
+        appendSummary(sb, "Hypothetical Latitude Warnings", report.hypotheticalWarnings());
+        sb.append("Cold Sweat config columns are the static config values before the Arctic Nights runtime outdoor-climate modifier. Use `Est C` for the authoritative Arctic Nights outdoor temperature used by snow, spawn ecology, and the live Cold Sweat modifier.\n");
+        sb.append("Static Cold Sweat reference warnings and hypothetical latitude warnings are separated from runtime flags so the headline stays focused on behavior the player can actually experience.\n");
+        sb.append("Samples cover representative latitudes, day/night positions, clear/rain/thunder weather, surface/mountain/cave positions, and seasonal anchors. Biome rows are hypothetical at each latitude: they test climate behavior if that biome exists there, not whether worldgen actually places that biome there.\n\n");
+        sb.append("## Runtime And Classification Flagged Rows\n\n");
         if (report.flaggedRowCount() == 0) {
             sb.append("_None._\n");
             return sb.toString();
         }
-        sb.append("| Biome | Phase | Tier | Archetype | Season | Weather | Sample | MC Temp | Est C | CS Config Night | CS Config Noon | CS Config Mid | Precip | Snow | Undead | Creeper | Flags |\n");
-        sb.append("|---|---:|---|---|---|---|---|---:|---:|---:|---:|---:|---|---|---:|---:|---|\n");
+        sb.append("| Biome | Phase | Tier | Archetype | Season | Weather | Time | Latitude | Sample | Z | MC Temp | Est C | CS Config Night | CS Config Noon | CS Config Mid | Precip | Snow | Undead | Creeper | Flags |\n");
+        sb.append("|---|---:|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---:|---:|---|\n");
         for (ClimateAuditRow row : report.rows()) {
-            if (row.flags().isEmpty()) continue;
+            List<String> primaryFlags = row.flags().stream().filter(ClimateAuditReporter::isPrimaryFlag).toList();
+            if (primaryFlags.isEmpty()) continue;
             sb.append("| `").append(row.biome()).append("` | ")
                     .append(row.phase() == null ? "" : row.phase()).append(" | ")
                     .append(escape(row.tier())).append(" | ")
                     .append(escape(row.archetype())).append(" | ")
                     .append(escape(row.season())).append(" | ")
                     .append(escape(row.weather())).append(" | ")
+                    .append(escape(row.time())).append(" | ")
+                    .append(escape(row.latitude())).append(" | ")
                     .append(escape(row.sample())).append(" | ")
+                    .append(row.z()).append(" | ")
                     .append(format(row.minecraftTemperature())).append(" | ")
                     .append(format(row.estimatedCelsius())).append(" | ")
                     .append(formatNullable(row.coldSweatNightC())).append(" | ")
@@ -589,7 +677,7 @@ public final class ClimateAuditReporter {
                     .append(row.snowBehavior()).append(" | ")
                     .append(format(row.undeadFactor())).append(" | ")
                     .append(format(row.creeperFactor())).append(" | ")
-                    .append(escape(row.flags().toString())).append(" |\n");
+                    .append(escape(primaryFlags.toString())).append(" |\n");
         }
         return sb.toString();
     }
@@ -606,7 +694,7 @@ public final class ClimateAuditReporter {
 
     private static String toCsv(ClimateAuditReport report) {
         StringBuilder sb = new StringBuilder();
-        sb.append("biome,phase,tier,archetype,season,weather,sample,x,y,z,exposed,climate_tags,minecraft_temperature,estimated_celsius,cold_sweat_config_night_c,cold_sweat_config_noon_c,cold_sweat_config_outdoor_c,rain_cooling,precipitation,snow_behavior,undead_factor,creeper_factor,flags\n");
+        sb.append("biome,phase,tier,archetype,season,weather,time,latitude,sample,x,y,z,exposed,climate_tags,minecraft_temperature,estimated_celsius,cold_sweat_config_night_c,cold_sweat_config_noon_c,cold_sweat_config_outdoor_c,rain_cooling,precipitation,snow_behavior,undead_factor,creeper_factor,flags\n");
         for (ClimateAuditRow row : report.rows()) {
             sb.append(csv(row.biome())).append(',')
                     .append(row.phase() == null ? "" : row.phase()).append(',')
@@ -614,6 +702,8 @@ public final class ClimateAuditReporter {
                     .append(csv(row.archetype())).append(',')
                     .append(csv(row.season())).append(',')
                     .append(csv(row.weather())).append(',')
+                    .append(csv(row.time())).append(',')
+                    .append(csv(row.latitude())).append(',')
                     .append(csv(row.sample())).append(',')
                     .append(row.x()).append(',')
                     .append(row.y()).append(',')
@@ -658,23 +748,25 @@ public final class ClimateAuditReporter {
         sb.append("- Subseason codes: `ES` early spring, `MS` mid spring, `LS` late spring, `EU` early summer, `MU` mid summer, `LU` late summer, `EA` early autumn, `MA` mid autumn, `LA` late autumn, `EW` early winter, `MW` mid winter, `LW` late winter.\n");
         sb.append("- Family codes: `U` undead, `C` creeper, `S` spider, `O` other unchanged hostile mobs, `-` none.\n");
         sb.append("- The CSV keeps raw Arctic Nights columns and pack-effective columns. The profile below uses pack-effective families after IW Core phase entity gates are applied when available.\n");
-        sb.append("- This matrix intersects Arctic Nights climate factors with each biome's actual monster spawn list. It does not include structure spawns, spawners, cave/depth variants, or world milestone state beyond current phase-gate rules.\n\n");
+        sb.append("- This matrix intersects Arctic Nights climate factors with each biome's actual monster spawn list at representative latitudes. It does not include structure spawns, spawners, cave/depth variants, or world milestone state beyond current phase-gate rules.\n");
+        sb.append("- Spawn rows model exposed surface spawning at midnight. Biome profiles below show the `temperate_start` latitude only; use the CSV for full latitude/weather detail.\n\n");
         sb.append("## Biome Profiles\n\n");
-        sb.append("| Biome | Phase | Archetype | Clear | Rain |\n");
-        sb.append("|---|---:|---|---|---|\n");
+        sb.append("| Biome | Phase | Archetype | Clear | Rain | Thunder |\n");
+        sb.append("|---|---:|---|---|---|---|\n");
         for (BiomeSpawnProfile profile : biomeSpawnProfiles(report.rows())) {
             sb.append("| `").append(profile.biome()).append("` | ")
                     .append(profile.phase()).append(" | ")
                     .append(escape(profile.archetype())).append(" | ")
                     .append(escape(profile.clearProfile())).append(" | ")
-                    .append(escape(profile.rainProfile())).append(" |\n");
+                    .append(escape(profile.rainProfile())).append(" | ")
+                    .append(escape(profile.thunderProfile())).append(" |\n");
         }
         return sb.toString();
     }
 
     private static String spawnMatrixCsv(SpawnMatrixReport report) {
         StringBuilder sb = new StringBuilder();
-        sb.append("biome,phase,tier,archetype,subseason,weather,minecraft_temperature,estimated_celsius,spawn_temperature,spawn_estimated_celsius,rain_cooling,precipitation,snow_behavior,undead_factor,creeper_factor,spider_factor,base_monsters,expected_monsters,removed_monsters,expected_families,pack_expected_monsters,pack_removed_monsters,pack_expected_families,pack_gate_modified,climate_modified\n");
+        sb.append("biome,phase,tier,archetype,subseason,weather,latitude,sample,time,x,y,z,minecraft_temperature,estimated_celsius,spawn_temperature,spawn_estimated_celsius,rain_cooling,precipitation,snow_behavior,undead_factor,creeper_factor,spider_factor,base_monsters,expected_monsters,removed_monsters,expected_families,pack_expected_monsters,pack_removed_monsters,pack_expected_families,pack_gate_modified,climate_modified\n");
         for (SpawnMatrixRow row : report.rows()) {
             sb.append(csv(row.biome())).append(',')
                     .append(row.phase()).append(',')
@@ -682,6 +774,12 @@ public final class ClimateAuditReporter {
                     .append(csv(row.archetype())).append(',')
                     .append(csv(row.subseason())).append(',')
                     .append(csv(row.weather())).append(',')
+                    .append(csv(row.latitude())).append(',')
+                    .append(csv(row.sample())).append(',')
+                    .append(csv(row.time())).append(',')
+                    .append(row.x()).append(',')
+                    .append(row.y()).append(',')
+                    .append(row.z()).append(',')
                     .append(format(row.minecraftTemperature())).append(',')
                     .append(format(row.estimatedCelsius())).append(',')
                     .append(format(row.spawnTemperature())).append(',')
@@ -747,7 +845,8 @@ public final class ClimateAuditReporter {
                     first.phase(),
                     first.archetype(),
                     weatherProfile(biomeRows, "clear"),
-                    weatherProfile(biomeRows, "rain")
+                    weatherProfile(biomeRows, "rain"),
+                    weatherProfile(biomeRows, "thunder")
             ));
         }
         return profiles;
@@ -756,6 +855,9 @@ public final class ClimateAuditReporter {
     private static String weatherProfile(List<SpawnMatrixRow> rows, String weather) {
         return rows.stream()
                 .filter(row -> weather.equals(row.weather()))
+                .filter(row -> "temperate_start".equals(row.latitude()))
+                .filter(row -> "surface".equals(row.sample()))
+                .filter(row -> SPAWN_TIME.name().equals(row.time()))
                 .sorted(Comparator.comparingInt(row -> subSeasonOrder(row.subseason())))
                 .map(row -> subSeasonCode(row.subseason()) + ":" + familyCode(row.packExpectedFamilies()))
                 .collect(Collectors.joining(" "));
@@ -830,13 +932,22 @@ public final class ClimateAuditReporter {
         return value == null ? "" : format(value);
     }
 
-    private record Sample(String name, BlockPos pos, boolean exposedToSky, float caveFactor) {
+    private record Sample(String name, int y, boolean exposedToSky, float caveFactor) {
+        BlockPos pos(LatitudeSample latitude) {
+            return new BlockPos(0, y, latitude.z());
+        }
     }
 
     private record SeasonSample(String name, Season.SubSeason subSeason) {
     }
 
-    private record WeatherSample(String name, boolean raining) {
+    private record TimeSample(String name, long dayTime) {
+    }
+
+    private record LatitudeSample(String name, int z) {
+    }
+
+    private record WeatherSample(String name, ClimateSnapshot.WeatherState weatherState) {
     }
 
     private record ColdSweatOutdoorConfig(
@@ -1184,9 +1295,13 @@ public final class ClimateAuditReporter {
             int biomeCount,
             int rowCount,
             int flaggedRowCount,
+            int referenceWarningRowCount,
+            int hypotheticalWarningRowCount,
             Map<String, Long> rowsByPhase,
             Map<String, Long> rowsByArchetype,
             Map<String, Long> flags,
+            Map<String, Long> referenceWarnings,
+            Map<String, Long> hypotheticalWarnings,
             List<ClimateAuditRow> rows
     ) {
     }
@@ -1198,6 +1313,8 @@ public final class ClimateAuditReporter {
             String archetype,
             String season,
             String weather,
+            String time,
+            String latitude,
             String sample,
             int x,
             int y,
@@ -1231,7 +1348,7 @@ public final class ClimateAuditReporter {
         }
     }
 
-    private record BiomeSpawnProfile(String biome, int phase, String archetype, String clearProfile, String rainProfile) {
+    private record BiomeSpawnProfile(String biome, int phase, String archetype, String clearProfile, String rainProfile, String thunderProfile) {
     }
 
     public record SpawnMatrixResult(SpawnMatrixReport report, Path csv, Path markdown) {
@@ -1260,6 +1377,12 @@ public final class ClimateAuditReporter {
             String archetype,
             String subseason,
             String weather,
+            String latitude,
+            String sample,
+            String time,
+            int x,
+            int y,
+            int z,
             float minecraftTemperature,
             double estimatedCelsius,
             float spawnTemperature,

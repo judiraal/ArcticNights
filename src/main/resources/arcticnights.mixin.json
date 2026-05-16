@@ -28,6 +28,7 @@
   ],
   "minVersion": "0.8",
   "client": [
+    "cold_sweat.TickOverlaysMixin",
     "iris.IrisRenderingPipelineMixin",
     "minecraft.ClientLevelMixin",
     "minecraft.FogRendererMixin",

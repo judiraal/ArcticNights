@@ -10,7 +10,11 @@ import com.momosoftworks.coldsweat.api.util.placement.Matcher;
 import com.momosoftworks.coldsweat.api.util.placement.Mode;
 import com.momosoftworks.coldsweat.api.util.placement.Order;
 import com.momosoftworks.coldsweat.api.util.placement.Placement;
+import com.momosoftworks.coldsweat.compat.CompatManager;
+import com.momosoftworks.coldsweat.config.ConfigSettings;
+import com.momosoftworks.coldsweat.core.init.ModItems;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.neoforged.bus.api.SubscribeEvent;
 
 @ConditionalEventBusSubscriber(dependencies = {"cold_sweat"})
@@ -42,5 +46,13 @@ public final class ColdSweatCompat {
                 modifier -> modifier.tickRate(20),
                 placement
         );
+    }
+
+    public static boolean showsAdvancedWorldTemperature(Player player) {
+        return !ConfigSettings.REQUIRE_THERMOMETER.get()
+                || player.isCreative()
+                || player.getInventory().items.stream().limit(9).anyMatch(stack -> stack.getItem() == ModItems.THERMOMETER.value())
+                || player.getOffhandItem().getItem() == ModItems.THERMOMETER.value()
+                || CompatManager.Curios.hasCurio(player, ModItems.THERMOMETER.value());
     }
 }

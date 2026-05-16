@@ -79,7 +79,11 @@ public final class ClimateService {
 
     public static ClimateSnapshot auditSnapshot(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, @Nullable Season.SubSeason subSeason, boolean raining) {
         ClimateSnapshot.WeatherState weatherState = raining ? ClimateSnapshot.WeatherState.RAIN : ClimateSnapshot.WeatherState.CLEAR;
-        return breakdown(level, biome, pos, exposedToSky, weatherState, subSeason, NOON).snapshot();
+        return auditSnapshot(level, biome, pos, exposedToSky, subSeason, weatherState, NOON);
+    }
+
+    public static ClimateSnapshot auditSnapshot(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, @Nullable Season.SubSeason subSeason, ClimateSnapshot.WeatherState weatherState, long dayTime) {
+        return breakdown(level, biome, pos, exposedToSky, weatherState, subSeason, dayTime).snapshot();
     }
 
     private static ClimateBreakdown breakdown(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Season.SubSeason subSeason, long dayTime) {

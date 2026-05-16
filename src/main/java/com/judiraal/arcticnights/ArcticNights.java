@@ -2,6 +2,7 @@ package com.judiraal.arcticnights;
 
 import com.judiraal.arcticnights.command.ArcticNightsCommands;
 import com.judiraal.arcticnights.compat.ConditionalSubscribers;
+import com.judiraal.arcticnights.network.OutdoorThermometerNetworking;
 import com.judiraal.arcticnights.util.ArcticSpawner;
 import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
 import com.mojang.logging.LogUtils;
@@ -52,6 +53,7 @@ public class ArcticNights {
         ConditionalSubscribers.inject(modContainer);
         modContainer.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
         ArcticNightsDensityFunctionTypes.TYPES.register(modEventBus);
+        modEventBus.addListener(OutdoorThermometerNetworking::register);
     }
 
     @SubscribeEvent
