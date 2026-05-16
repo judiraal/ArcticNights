@@ -81,8 +81,8 @@ public final class SnowMeltHandler {
         if (biomeHolder.is(Tags.Biomes.IS_CAVE)) return false;
         if (biomeHolder.is(ModTags.Biomes.BLACKLISTED_BIOMES) && !biomeHolder.is(Biomes.RIVER)) return false;
 
-        final float temp = ClimateService.baseMinecraftTemperature(level, biomeHolder, pos);
-        ClimateSnapshot.SnowBehavior snowBehavior = ClimateService.snowBehavior(temp);
+        ClimateSnapshot snapshot = ClimateService.snapshot(level, biomeHolder, pos);
+        ClimateSnapshot.SnowBehavior snowBehavior = snapshot.snowBehavior();
         if (snowBehavior == ClimateSnapshot.SnowBehavior.PERSISTENT) return false;
         if (snowBehavior == ClimateSnapshot.SnowBehavior.TRANSITIONAL_SURFACE) {
             final int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, pos.getX(), pos.getZ());

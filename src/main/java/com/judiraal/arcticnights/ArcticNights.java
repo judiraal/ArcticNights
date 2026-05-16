@@ -1,6 +1,7 @@
 package com.judiraal.arcticnights;
 
 import com.judiraal.arcticnights.command.ArcticNightsCommands;
+import com.judiraal.arcticnights.compat.ConditionalSubscribers;
 import com.judiraal.arcticnights.util.ArcticSpawner;
 import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
 import com.mojang.logging.LogUtils;
@@ -41,12 +42,14 @@ public class ArcticNights {
     public static final String MOD_ID = "arcticnights";
     public static final boolean SERENE_SEASONS = modLoaded("sereneseasons");
     public static final boolean IRIS = modLoaded("iris");
+    public static final boolean COLD_SWEAT = modLoaded("cold_sweat");
 
     private static boolean modLoaded(String modName) {
         return FMLLoader.getLoadingModList().getModFileById(modName) != null;
     }
 
     public ArcticNights(IEventBus modEventBus, ModContainer modContainer) {
+        ConditionalSubscribers.inject(modContainer);
         modContainer.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
         ArcticNightsDensityFunctionTypes.TYPES.register(modEventBus);
     }

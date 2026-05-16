@@ -56,7 +56,14 @@ public final class ClimateAuditReporter {
             new WeatherSample("rain", true)
     );
     private static final Sample SPAWN_SURFACE_SAMPLE = new Sample("surface", new BlockPos(0, 64, 0), true, 0.0F);
-    private static final float[] SUBSEASON_SPIDER_FACTOR = new float[] {0, 0, 0, 0, 0, 0, 2, 3, 2, 1, 1, 1};
+    private static final float UNDEAD_COLD_THRESHOLD = 0.15F;
+    private static final float UNDEAD_COLD_RAMP = 0.35F;
+    private static final float RAIN_STRAY_UNDEAD_FACTOR = 0.12F;
+    private static final float MIN_MEANINGFUL_SPAWN_FACTOR = 0.08F;
+    private static final float MIN_MEANINGFUL_SPIDER_FACTOR = 0.20F;
+    private static final float CREEPER_HEAT_START = 0.55F;
+    private static final float CREEPER_HEAT_FULL = 1.15F;
+    private static final float MIN_MEANINGFUL_CREEPER_FACTOR = 0.08F;
 
     private ClimateAuditReporter() {
     }
@@ -229,22 +236,22 @@ public final class ClimateAuditReporter {
                 snapshot.precipitationKind().name().toLowerCase(),
                 snapshot.snowBehavior().name().toLowerCase(),
                 undeadFactor(tags, spawnTemperature(snapshot), snapshot.minecraftTemperature(), sample.caveFactor(), snapshot.rainCooling()),
-                creeperFactor(tags, spawnTemperature(snapshot), sample.caveFactor()),
+                creeperFactor(tags, snapshot, sample.caveFactor()),
                 flags
         );
     }
 
     private static SpawnMatrixRow spawnRow(String biomeId, List<String> tags, Holder<Biome> biome, SourceOrderTier tier, String archetype, SeasonSample season, WeatherSample weather, ClimateSnapshot snapshot, PhaseEntityGateConfig phaseEntityGates) {
         float spawnTemperature = spawnTemperature(snapshot);
-        float undeadFactor = undeadFactor(tags, spawnTemperature, snapshot.minecraftTemperature(), 0.0F, snapshot.rainCooling());
-        float creeperFactor = creeperFactor(tags, spawnTemperature, 0.0F);
-        float spiderFactor = spiderFactor(season.subSeason(), 0.0F);
+        float undeadFactor = undeadFactor(tags, spawnTemperature, snapshot.clearOutdoorMinecraftTemperature(), 0.0F, snapshot.rainCooling());
+        float creeperFactor = creeperFactor(tags, snapshot, 0.0F);
+        float spiderFactor = spiderFactor(season.subSeason(), snapshot, 0.0F);
         List<SpawnEntry> baseEntries = baseMonsterEntries(biome);
         List<SpawnEntry> expectedEntries = new ArrayList<>();
         List<String> removedEntries = new ArrayList<>();
         boolean climateModified = false;
         for (SpawnEntry entry : baseEntries) {
-            float factor = spawnFactor(entry.type(), tags, spawnTemperature, snapshot.minecraftTemperature(), snapshot.rainCooling(), season.subSeason(), 0.0F);
+            float factor = spawnFactor(entry.type(), tags, spawnTemperature, snapshot, season.subSeason(), 0.0F);
             if (factor <= 0.0F) {
                 removedEntries.add(entry.id());
                 climateModified = true;
@@ -325,34 +332,58 @@ public final class ClimateAuditReporter {
     }
 
     private static float spawnTemperature(ClimateSnapshot snapshot) {
-        if (!snapshot.rainCooling()) return snapshot.minecraftTemperature();
-        return ClimateService.rainCooledTemperature(snapshot.minecraftTemperature());
+        return snapshot.outdoorMinecraftTemperature();
     }
 
     private static float undeadFactor(List<String> tags, float spawnTemperature, float dryMinecraftTemperature, float caveFactor, boolean rainCooling) {
         if (tags.contains("c:is_hot") || tags.contains("c:is_hot/overworld")) return 0.0F;
-        if (spawnTemperature > 0.15F) return 0.0F;
-        if (rainCooling && dryMinecraftTemperature > 0.15F) return 0.12F;
-        return Mth.lerp(caveFactor / 2.0F, -5.0F * (spawnTemperature - 0.1F) + 1.0F, 1.0F);
+        if (rainCooling && dryMinecraftTemperature > UNDEAD_COLD_THRESHOLD) return RAIN_STRAY_UNDEAD_FACTOR;
+        float coldSeverity = Mth.clamp((UNDEAD_COLD_THRESHOLD - spawnTemperature) / UNDEAD_COLD_RAMP, 0.0F, 1.0F);
+        float factor = Mth.lerp(caveFactor / 2.0F, coldSeverity * coldSeverity * 2.2F, 1.0F);
+        return factor < MIN_MEANINGFUL_SPAWN_FACTOR ? 0.0F : factor;
     }
 
-    private static float creeperFactor(List<String> tags, float spawnTemperature, float caveFactor) {
+    private static float creeperFactor(List<String> tags, ClimateSnapshot snapshot, float caveFactor) {
         if (tags.contains("c:is_cold") || tags.contains("c:is_cold/overworld")) return 0.0F;
-        if (spawnTemperature < 0.7F) return 0.0F;
-        return Mth.lerp(caveFactor / 2.0F, 3.0F * (spawnTemperature - 1.0F) + 1.0F, 1.0F);
+        float heatSeverity = smoothStep((snapshot.outdoorMinecraftTemperature() - CREEPER_HEAT_START) / (CREEPER_HEAT_FULL - CREEPER_HEAT_START));
+        float factor = Mth.lerp(caveFactor / 2.0F, heatSeverity * 2.0F, 1.0F);
+        return factor < MIN_MEANINGFUL_CREEPER_FACTOR ? 0.0F : factor;
     }
 
-    private static float spiderFactor(Season.SubSeason subSeason, float caveFactor) {
-        float seasonalFactor = subSeason == null ? 0.0F : SUBSEASON_SPIDER_FACTOR[Math.min(subSeason.ordinal(), SUBSEASON_SPIDER_FACTOR.length - 1)];
-        float deepFactor = caveFactor > 0.0F ? 1.0F : 0.0F;
-        return Math.max(seasonalFactor, deepFactor);
+    private static float spiderFactor(Season.SubSeason subSeason, ClimateSnapshot snapshot, float caveFactor) {
+        float deepFactor = caveFactor >= 0.5F ? 1.0F : 0.0F;
+        if (deepFactor > 0.0F) return deepFactor;
+        float seasonFactor = autumnProgressionFactor(subSeason);
+        if (seasonFactor <= 0.0F) return 0.0F;
+        float temp = snapshot.outdoorMinecraftTemperature();
+        float coolFactor = 1.0F - smoothStep(Mth.clamp((temp - 0.55F) / 0.35F, 0.0F, 1.0F));
+        float weatherFactor = snapshot.rainCooling() ? 0.35F : 0.0F;
+        if (snapshot.weatherState() == ClimateSnapshot.WeatherState.THUNDER) weatherFactor += 0.2F;
+        float climateFactor = Mth.clamp(0.5F + coolFactor * 0.8F + weatherFactor, 0.35F, 1.65F);
+        float factor = seasonFactor * climateFactor;
+        return factor < MIN_MEANINGFUL_SPIDER_FACTOR ? 0.0F : factor;
     }
 
-    private static float spawnFactor(EntityType<?> type, List<String> tags, float spawnTemperature, float dryMinecraftTemperature, boolean rainCooling, Season.SubSeason subSeason, float caveFactor) {
+    private static float autumnProgressionFactor(Season.SubSeason subSeason) {
+        if (subSeason == null) return 0.0F;
+        float representativeDay = subSeason.ordinal() * 8.0F + 4.0F;
+        if (representativeDay < 40.0F) return 0.0F;
+        if (representativeDay < 60.0F) return smoothStep((representativeDay - 40.0F) / 20.0F);
+        if (representativeDay < 84.0F) return Mth.lerp(smoothStep((representativeDay - 60.0F) / 24.0F), 1.0F, 0.45F);
+        if (representativeDay < 96.0F) return Mth.lerp(smoothStep((representativeDay - 84.0F) / 12.0F), 0.45F, 0.0F);
+        return 0.0F;
+    }
+
+    private static float smoothStep(float value) {
+        float clamped = Mth.clamp(value, 0.0F, 1.0F);
+        return clamped * clamped * (3.0F - 2.0F * clamped);
+    }
+
+    private static float spawnFactor(EntityType<?> type, List<String> tags, float spawnTemperature, ClimateSnapshot snapshot, Season.SubSeason subSeason, float caveFactor) {
         if (type == EntityType.WITCH) return tags.contains("arcticnights:witch_wetlands") ? 1.0F : 0.0F;
-        if (type.is(EntityTypeTags.UNDEAD)) return undeadFactor(tags, spawnTemperature, dryMinecraftTemperature, caveFactor, rainCooling);
-        if (type == EntityType.CREEPER) return creeperFactor(tags, spawnTemperature, caveFactor);
-        if (type == EntityType.SPIDER) return spiderFactor(subSeason, caveFactor);
+        if (type.is(EntityTypeTags.UNDEAD)) return undeadFactor(tags, spawnTemperature, snapshot.clearOutdoorMinecraftTemperature(), caveFactor, snapshot.rainCooling());
+        if (type == EntityType.CREEPER) return creeperFactor(tags, snapshot, caveFactor);
+        if (type == EntityType.SPIDER) return spiderFactor(subSeason, snapshot, caveFactor);
         return 1.0F;
     }
 

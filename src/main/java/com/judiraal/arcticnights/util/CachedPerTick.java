@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 
 public class CachedPerTick<T, R> {
     private final Function<T, R> function;
+    private T currentInput;
     private R currentValue;
     private long lastTickCount = -1;
 
@@ -17,12 +18,17 @@ public class CachedPerTick<T, R> {
     }
 
     public R get(long tickCount, T t) {
-        return get(tickCount, () -> t);
+        if (tickCount == lastTickCount && currentInput == t) return currentValue;
+        currentInput = t;
+        currentValue = function.apply(t);
+        lastTickCount = tickCount;
+        return currentValue;
     }
 
     public R get(long tickCount, Supplier<T> supplier) {
         if (tickCount == lastTickCount) return currentValue;
-        currentValue = function.apply(supplier.get());
+        currentInput = supplier.get();
+        currentValue = function.apply(currentInput);
         lastTickCount = tickCount;
         return currentValue;
     }

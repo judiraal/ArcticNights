@@ -1,6 +1,7 @@
 package com.judiraal.arcticnights.util;
 
 import com.judiraal.arcticnights.ArcticNights;
+import com.judiraal.arcticnights.ArcticNightsConfig;
 import it.unimi.dsi.fastutil.longs.Long2ByteLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2FloatLinkedOpenHashMap;
 import net.minecraft.core.BlockPos;
@@ -19,13 +20,18 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.biome.Biome;
 import sereneseasons.api.season.ISeasonState;
 import sereneseasons.api.season.SeasonHelper;
-import sereneseasons.season.SeasonHooks;
 
 import javax.annotation.Nullable;
 
 public class ArcticSpawner {
     private static final float UNDEAD_COLD_THRESHOLD = 0.15F;
     private static final float RAIN_STRAY_UNDEAD_FACTOR = 0.12F;
+    private static final float UNDEAD_COLD_RAMP = 0.35F;
+    private static final float MIN_MEANINGFUL_SPAWN_FACTOR = 0.08F;
+    private static final float MIN_MEANINGFUL_SPIDER_FACTOR = 0.20F;
+    private static final float CREEPER_HEAT_START = 0.55F;
+    private static final float CREEPER_HEAT_FULL = 1.15F;
+    private static final float MIN_MEANINGFUL_CREEPER_FACTOR = 0.08F;
     private static final int LAVA_LAKE_HORIZONTAL_RADIUS = 9;
     private static final int LAVA_LAKE_HORIZONTAL_STEP = 3;
     private static final int LAVA_LAKE_VERTICAL_RADIUS = 4;
@@ -81,8 +87,6 @@ public class ArcticSpawner {
         return ClimateService.isRainCooling(level, biome, pos);
     }
 
-    private static final float[] subSeasonSpiderFactor = new float[] {0, 0, 0, 0, 0, 0, 2, 3, 2, 1, 1, 1};
-
     public static float spawnFactor(EntityType<?> entityType, BlockPos pos, ServerLevel level) {
         if (entityType == EntityType.WITCH) {
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
@@ -92,27 +96,62 @@ public class ArcticSpawner {
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
             if (biome.is(HOT)) return 0.0F;
             var temp = getTemperature(level, biome, pos);
-            if (temp > UNDEAD_COLD_THRESHOLD) return 0.0F;
             if (isRainCooling(level, biome, pos)) {
-                float dryTemp = temp / 2.0F + 0.3F;
-                if (dryTemp > UNDEAD_COLD_THRESHOLD) return RAIN_STRAY_UNDEAD_FACTOR;
+                ClimateSnapshot snapshot = ClimateService.snapshot(level, biome, pos);
+                if (snapshot.clearOutdoorMinecraftTemperature() > UNDEAD_COLD_THRESHOLD) return RAIN_STRAY_UNDEAD_FACTOR;
             }
-            return Mth.lerp(getCaveFactor(level, pos)/2, -5F*(temp-0.1F)+1F, 1.0F);
+            float coldSeverity = Mth.clamp((UNDEAD_COLD_THRESHOLD - temp) / UNDEAD_COLD_RAMP, 0.0F, 1.0F);
+            float factor = Mth.lerp(getCaveFactor(level, pos) / 2.0F, coldSeverity * coldSeverity * 2.2F, 1.0F);
+            return factor < MIN_MEANINGFUL_SPAWN_FACTOR ? 0.0F : factor;
         } else if (entityType.is(REQUIRE_AUTUMN_OR_DEEP)) {
-            var seasonalFactor = ArcticNights.SERENE_SEASONS
-                    ? subSeasonSpiderFactor[SeasonsCompat.getSeason(level).getSubSeason().ordinal()]
-                    : 0.0F;
-            var deepFactor = pos.getY() < 32 ? 1.0F : 0.0F;
-            return Math.max(seasonalFactor, deepFactor);
+            var caveFactor = getCaveFactor(level, pos);
+            var deepFactor = caveFactor >= 0.5F ? 1.0F : 0.0F;
+            if (deepFactor > 0.0F) return deepFactor;
+            var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
+            ClimateSnapshot snapshot = ClimateService.snapshot(level, biome, pos);
+            float factor = autumnSpiderFactor(level, snapshot);
+            return factor < MIN_MEANINGFUL_SPIDER_FACTOR ? 0.0F : factor;
         } else if (entityType.is(REQUIRE_HOT)) {
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
             if (entityType == EntityType.CREEPER && isNearUndergroundLavaLake(level, pos)) return 1.0F;
             if (biome.is(COLD)) return 0.0F;
-            var temp = getTemperature(level, biome, pos);
-            if (temp < 0.7F) return 0.0F;
-            return Mth.lerp(getCaveFactor(level, pos)/2, 3F*(temp-1F)+1F, 1.0F);
+            ClimateSnapshot snapshot = ClimateService.snapshot(level, biome, pos);
+            float factor = creeperFactor(snapshot, getCaveFactor(level, pos));
+            return factor < MIN_MEANINGFUL_CREEPER_FACTOR ? 0.0F : factor;
         }
         return 1.0F;
+    }
+
+    private static float autumnSpiderFactor(ServerLevel level, ClimateSnapshot snapshot) {
+        float seasonFactor = autumnProgressionFactor(level);
+        if (seasonFactor <= 0.0F) return 0.0F;
+
+        float temp = snapshot.outdoorMinecraftTemperature();
+        float coolFactor = 1.0F - smoothStep(Mth.clamp((temp - 0.55F) / 0.35F, 0.0F, 1.0F));
+        float weatherFactor = snapshot.rainCooling() ? 0.35F : 0.0F;
+        if (snapshot.weatherState() == ClimateSnapshot.WeatherState.THUNDER) weatherFactor += 0.2F;
+        float climateFactor = Mth.clamp(0.5F + coolFactor * 0.8F + weatherFactor, 0.35F, 1.65F);
+        return seasonFactor * climateFactor;
+    }
+
+    private static float creeperFactor(ClimateSnapshot snapshot, float caveFactor) {
+        float temp = snapshot.outdoorMinecraftTemperature();
+        float heatSeverity = smoothStep((temp - CREEPER_HEAT_START) / (CREEPER_HEAT_FULL - CREEPER_HEAT_START));
+        return Mth.lerp(caveFactor / 2.0F, heatSeverity * 2.0F, 1.0F);
+    }
+
+    private static float autumnProgressionFactor(ServerLevel level) {
+        float day = SeasonsCompat.getYearDay(level);
+        if (day < 40.0F) return 0.0F;
+        if (day < 60.0F) return smoothStep((day - 40.0F) / 20.0F);
+        if (day < 84.0F) return Mth.lerp(smoothStep((day - 60.0F) / 24.0F), 1.0F, 0.45F);
+        if (day < 96.0F) return Mth.lerp(smoothStep((day - 84.0F) / 12.0F), 0.45F, 0.0F);
+        return 0.0F;
+    }
+
+    private static float smoothStep(float value) {
+        float clamped = Mth.clamp(value, 0.0F, 1.0F);
+        return clamped * clamped * (3.0F - 2.0F * clamped);
     }
 
     private static float getCaveFactor(ServerLevel level, BlockPos pos) {
@@ -169,12 +208,16 @@ public class ArcticSpawner {
     private static class SeasonsCompat {
         private static final CachedPerTick<Level, ISeasonState> SEASON_STATE = CachedPerTick.of(SeasonHelper::getSeasonState);
 
-        static float getTemperature(ServerLevel level, Holder<Biome> biome, BlockPos pos) {
-            return SeasonHooks.getBiomeTemperatureInSeason(getSeason(level).getSubSeason(), biome, pos);
-        }
-
         static ISeasonState getSeason(ServerLevel level) {
             return SEASON_STATE.get(level.getGameTime() >> 3, level);
+        }
+
+        static float getYearDay(ServerLevel level) {
+            if (ArcticNights.SERENE_SEASONS) return getSeason(level).getDay();
+            int daysPerYear = ArcticNightsConfig.daysPerSeason.get() << 2;
+            if (daysPerYear <= 0) return 32.0F;
+            long day = level.getDayTime() / 24_000L;
+            return Math.floorMod(day * 96L / daysPerYear, 96L);
         }
     }
 }
