@@ -4,8 +4,7 @@ import com.judiraal.arcticnights.ArcticNights;
 import com.judiraal.arcticnights.compat.ConditionalEventBusSubscriber;
 import com.momosoftworks.coldsweat.api.event.core.init.DefaultTempModifiersEvent;
 import com.momosoftworks.coldsweat.api.event.core.registry.TempModifierRegisterEvent;
-import com.momosoftworks.coldsweat.api.temperature.modifier.BlockTempModifier;
-import com.momosoftworks.coldsweat.api.temperature.modifier.CaveBiomeTempModifier;
+import com.momosoftworks.coldsweat.api.temperature.modifier.BiomeTempModifier;
 import com.momosoftworks.coldsweat.api.util.Temperature;
 import com.momosoftworks.coldsweat.api.util.placement.Matcher;
 import com.momosoftworks.coldsweat.api.util.placement.Mode;
@@ -29,12 +28,12 @@ public final class ColdSweatCompat {
 
     @SubscribeEvent
     public static void addDefaultModifiers(DefaultTempModifiersEvent event) {
-        Placement beforeBlock = Placement
-                .of(Mode.ADD_BEFORE, Order.FIRST, modifier -> modifier instanceof BlockTempModifier)
-                .orElse(Placement.LAST);
+        event.removeModifiers(Temperature.Trait.WORLD, modifier ->
+                OUTDOOR_CLIMATE_MODIFIER.equals(modifier.getID()) || modifier instanceof OutdoorClimateTempModifier);
+
         Placement placement = Placement
-                .of(Mode.ADD_BEFORE, Order.FIRST, modifier -> modifier instanceof CaveBiomeTempModifier)
-                .orElse(beforeBlock)
+                .of(Mode.ADD_AFTER, Order.FIRST, modifier -> modifier instanceof BiomeTempModifier)
+                .orElse(Placement.FIRST)
                 .noDuplicates(Matcher.SAME_CLASS);
 
         event.addModifierById(

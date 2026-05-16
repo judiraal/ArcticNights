@@ -1,6 +1,7 @@
 package com.judiraal.arcticnights.command;
 
 import com.judiraal.arcticnights.ArcticNights;
+import com.judiraal.arcticnights.compat.cold_sweat.ColdSweatDebug;
 import com.judiraal.arcticnights.util.ClimateAuditReporter;
 import com.judiraal.arcticnights.util.ClimateService;
 import com.mojang.brigadier.arguments.FloatArgumentType;
@@ -62,14 +63,14 @@ public final class ArcticNightsCommands {
                 + " (" + biomeId + "): "
                 + c(snapshot.estimatedCelsius()) + " C, "
                 + "mc=" + f(snapshot.outdoorMinecraftTemperature()) + ", "
-                + snapshot.weatherState().name().toLowerCase(Locale.ROOT) + ", "
-                + snapshot.precipitationKind().name().toLowerCase(Locale.ROOT) + ", "
-                + snapshot.snowBehavior().name().toLowerCase(Locale.ROOT)), false);
+                + "weather=" + snapshot.weatherState().name().toLowerCase(Locale.ROOT) + ", "
+                + "precip=" + snapshot.precipitationKind().name().toLowerCase(Locale.ROOT) + ", "
+                + "snow=" + snapshot.snowBehavior().name().toLowerCase(Locale.ROOT)), false);
         context.getSource().sendSuccess(() -> Component.literal("components: pole="
                 + f(breakdown.poleFactor())
                 + ", latitude=" + f(breakdown.latitudeMean()) + " (" + deltaC(breakdown.latitudeMean()) + " C as temp)"
                 + ", seasonFactor=" + f(breakdown.seasonFactor())
-                + ", seasonScale=" + f(breakdown.seasonalScale())
+                + ", seasonRange=" + f(breakdown.seasonalScale()) + " (" + deltaC(breakdown.seasonalScale()) + " C half-range)"
                 + ", season=" + signedDeltaC(breakdown.seasonOffset()) + " C"
                 + ", biome=" + signedDeltaC(breakdown.biomeOffset()) + " C"), false);
         context.getSource().sendSuccess(() -> Component.literal("runtime: base="
@@ -79,7 +80,25 @@ public final class ArcticNightsCommands {
                 + ", day/night=" + signedDeltaC(breakdown.dayNightOffset()) + " C"
                 + ", compression=" + f(breakdown.weatherCompression() * 100.0F) + "%"
                 + ", clear=" + c(ClimateService.estimatedCelsius(snapshot.clearOutdoorMinecraftTemperature())) + " C"), false);
+        sendColdSweatDebug(context, level, pos);
         return Math.round(snapshot.outdoorMinecraftTemperature() * 100.0F);
+    }
+
+    private static void sendColdSweatDebug(CommandContext<CommandSourceStack> context, ServerLevel level, BlockPos pos) {
+        if (!ArcticNights.COLD_SWEAT) {
+            context.getSource().sendSuccess(() -> Component.literal("Cold Sweat: not loaded"), false);
+            return;
+        }
+
+        try {
+            for (String line : ColdSweatDebug.describe(context.getSource(), level, pos)) {
+                context.getSource().sendSuccess(() -> Component.literal(line), false);
+            }
+        } catch (Throwable t) {
+            ArcticNights.LOGGER.warn("Unable to describe Cold Sweat temperature state", t);
+            context.getSource().sendFailure(Component.literal("Cold Sweat debug failed: " + t.getClass().getSimpleName()
+                    + ": " + t.getMessage()));
+        }
     }
 
     private static int setWeatherOffset(CommandContext<CommandSourceStack> context) {
@@ -137,11 +156,11 @@ public final class ArcticNightsCommands {
     }
 
     private static String deltaC(float minecraftTemperatureOffset) {
-        return c(minecraftTemperatureOffset * 40.0F);
+        return c(ClimateService.estimatedCelsius(minecraftTemperatureOffset));
     }
 
     private static String signedDeltaC(float minecraftTemperatureOffset) {
-        return signed(minecraftTemperatureOffset * 40.0F);
+        return signed(ClimateService.estimatedCelsius(minecraftTemperatureOffset));
     }
 
     private static String signed(double value) {

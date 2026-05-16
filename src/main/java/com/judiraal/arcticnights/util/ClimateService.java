@@ -10,16 +10,37 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.material.Fluids;
 import javax.annotation.Nullable;
 import sereneseasons.api.season.Season;
 
 public final class ClimateService {
     private static final int NOON = 6_000;
     private static final int CLIMATE_REGION_SIZE = 2_048;
+    private static final double COLD_SWEAT_CELSIUS_PER_MC = 25.0D;
     private static final double ABSOLUTE_WEATHER_VARIANCE_C = 5.0D;
     private static final double RELATIVE_WEATHER_VARIANCE = 0.10D;
+    private static final int WEATHER_ANOMALY_TRANSITION_TICKS = 2_000;
+    private static final float EQUATOR_WINTER_C = 24.0F;
+    private static final float EQUATOR_SPRING_AUTUMN_C = 30.0F;
+    private static final float EQUATOR_SUMMER_C = 40.5F;
+    private static final float TEMPERATE_WINTER_C = 0.0F;
+    private static final float TEMPERATE_SPRING_AUTUMN_C = 18.0F;
+    private static final float TEMPERATE_SUMMER_C = 26.0F;
+    private static final float POLE_WINTER_C = -37.5F;
+    private static final float POLE_SPRING_AUTUMN_C = -12.0F;
+    private static final float POLE_SUMMER_C = 5.0F;
+    private static final float TEMPERATE_PLATEAU_MIN = 0.35F;
+    private static final float TEMPERATE_PLATEAU_MAX = 0.65F;
+    private static final float SNOW_THRESHOLD = 3.0F / 25.0F;
+    private static final float PERSISTENT_SNOW_THRESHOLD = -3.0F / 25.0F;
     private static float debugWeatherOffset = Float.NaN;
     private static final TagKey<Biome> COLD = tag("c", "is_cold");
     private static final TagKey<Biome> COLD_OVERWORLD = tag("c", "is_cold/overworld");
@@ -66,9 +87,9 @@ public final class ClimateService {
         float latitudeMean = latitudeMean(poleFactor);
         float seasonFactor = seasonFactor(level, subSeason);
         float seasonalScale = seasonalScale(poleFactor);
-        float seasonOffset = seasonOffset(seasonFactor, seasonalScale);
+        float seasonOffset = seasonOffset(seasonFactor, poleFactor);
         float biomeOffset = biomeOffset(biome);
-        float baseTemperature = Mth.clamp(latitudeMean + seasonOffset + biomeOffset, -1.1F, 1.6F);
+        float baseTemperature = Mth.clamp(latitudeMean + seasonOffset + biomeOffset, -1.8F, 1.8F);
         float weatherOffset = climateAnomaly(level, pos, subSeason, weatherState, baseTemperature);
         float minecraftTemperature = baseTemperature + weatherOffset;
         float dayNightOffset = dayNightOffset(biome, dayTime);
@@ -133,9 +154,9 @@ public final class ClimateService {
     private static float arcticOutdoorMean(Level level, Holder<Biome> biome, BlockPos pos, @Nullable Season.SubSeason subSeason) {
         float poleFactor = poleFactor(pos);
         float latitudeMean = latitudeMean(poleFactor);
-        float seasonOffset = seasonOffset(seasonFactor(level, subSeason), seasonalScale(poleFactor));
+        float seasonOffset = seasonOffset(seasonFactor(level, subSeason), poleFactor);
         float biomeOffset = biomeOffset(biome);
-        return Mth.clamp(latitudeMean + seasonOffset + biomeOffset, -1.1F, 1.6F);
+        return Mth.clamp(latitudeMean + seasonOffset + biomeOffset, -1.8F, 1.8F);
     }
 
     private static float poleFactor(BlockPos pos) {
@@ -144,22 +165,48 @@ public final class ClimateService {
     }
 
     private static float latitudeMean(float poleFactor) {
-        return 0.85F - 0.9F * (float) Math.pow(poleFactor, 1.35D);
+        return minecraftTemperatureFromCelsius(springAutumnC(poleFactor));
     }
 
     private static float seasonalScale(float poleFactor) {
-        return 0.2F + 0.8F * (float) Math.pow(poleFactor, 0.85D);
+        return celsiusOffsetToMinecraftTemperatureOffset((summerC(poleFactor) - winterC(poleFactor)) * 0.5F);
     }
 
-    private static float seasonOffset(float seasonFactor, float seasonalScale) {
-        return seasonFactor >= 0.0F
-                ? seasonFactor * 0.2F * seasonalScale
-                : seasonFactor * 0.72F * seasonalScale;
+    private static float seasonOffset(float seasonFactor, float poleFactor) {
+        float springAutumnC = springAutumnC(poleFactor);
+        float seasonC = seasonFactor >= 0.0F
+                ? Mth.lerp(seasonFactor, springAutumnC, summerC(poleFactor))
+                : Mth.lerp(-seasonFactor, springAutumnC, winterC(poleFactor));
+        return celsiusOffsetToMinecraftTemperatureOffset(seasonC - springAutumnC);
+    }
+
+    private static float winterC(float poleFactor) {
+        return latitudeTargetC(poleFactor, EQUATOR_WINTER_C, TEMPERATE_WINTER_C, POLE_WINTER_C);
+    }
+
+    private static float springAutumnC(float poleFactor) {
+        return latitudeTargetC(poleFactor, EQUATOR_SPRING_AUTUMN_C, TEMPERATE_SPRING_AUTUMN_C, POLE_SPRING_AUTUMN_C);
+    }
+
+    private static float summerC(float poleFactor) {
+        return latitudeTargetC(poleFactor, EQUATOR_SUMMER_C, TEMPERATE_SUMMER_C, POLE_SUMMER_C);
+    }
+
+    private static float latitudeTargetC(float poleFactor, float equatorC, float temperateC, float poleC) {
+        float equatorBlend = 1.0F - climateEase(poleFactor / TEMPERATE_PLATEAU_MIN);
+        float poleBlend = climateEase((poleFactor - TEMPERATE_PLATEAU_MAX) / (1.0F - TEMPERATE_PLATEAU_MAX));
+        float temperateBlend = Mth.clamp(1.0F - equatorBlend - poleBlend, 0.0F, 1.0F);
+        return equatorBlend * equatorC + temperateBlend * temperateC + poleBlend * poleC;
+    }
+
+    private static float climateEase(float value) {
+        float t = Mth.clamp(value, 0.0F, 1.0F);
+        return (1.0F - Mth.cos(t * Mth.PI)) * 0.5F;
     }
 
     private static float biomeOffset(Holder<Biome> biome) {
         float biomeTemperature = biome.value().getBaseTemperature();
-        return Mth.clamp(biomeTemperature - 0.8F, -0.45F, 0.45F) * 0.27F;
+        return Mth.clamp(biomeTemperature - 0.8F, -0.45F, 0.45F) * 0.4F;
     }
 
     private static float seasonFactor(Level level, @Nullable Season.SubSeason subSeason) {
@@ -168,7 +215,7 @@ public final class ClimateService {
     }
 
     private static float seasonFactor(Season.SubSeason subSeason) {
-        float representativeDay = subSeason.ordinal() * 8.0F + 4.0F;
+        float representativeDay = subSeason.ordinal() * 8.0F;
         return Mth.cos((representativeDay - 32.0F) / 48.0F * Mth.PI);
     }
 
@@ -201,13 +248,19 @@ public final class ClimateService {
 
     private static float maxWeatherVariance(float baseTemperature) {
         double baseCelsius = estimatedCelsius(baseTemperature);
-        return (float) ((ABSOLUTE_WEATHER_VARIANCE_C + Math.abs(baseCelsius) * RELATIVE_WEATHER_VARIANCE) / 40.0D);
+        return (float) ((ABSOLUTE_WEATHER_VARIANCE_C + Math.abs(baseCelsius) * RELATIVE_WEATHER_VARIANCE) / COLD_SWEAT_CELSIUS_PER_MC);
     }
 
     private static float interpolatedDailyAnomaly(long dayTime, BlockPos pos) {
         long shiftedTime = dayTime - NOON;
         long cycle = Math.floorDiv(shiftedTime, 24_000L);
-        float progress = Math.floorMod(shiftedTime, 24_000L) / 24_000.0F;
+        long ticksSinceNoon = Math.floorMod(shiftedTime, 24_000L);
+        long transitionStart = 24_000L - WEATHER_ANOMALY_TRANSITION_TICKS;
+        if (ticksSinceNoon < transitionStart) {
+            return dailyAnomaly(cycle, pos);
+        }
+
+        float progress = (ticksSinceNoon - transitionStart) / (float) WEATHER_ANOMALY_TRANSITION_TICKS;
         float blend = progress * progress * (3.0F - 2.0F * progress);
         return Mth.lerp(blend, dailyAnomaly(cycle, pos), dailyAnomaly(cycle + 1L, pos));
     }
@@ -252,10 +305,10 @@ public final class ClimateService {
     }
 
     private static float dayNightAmplitude(Holder<Biome> biome) {
-        if (biome.is(WET) || biome.is(WET_OVERWORLD) || biome.is(OCEAN) || biome.is(BiomeTags.IS_JUNGLE)) return 0.08F;
-        if (biome.is(COLD) || biome.is(COLD_OVERWORLD) || biome.is(MOUNTAIN) || biome.is(BiomeTags.IS_TAIGA)) return 0.12F;
-        if (biome.is(HOT) || biome.is(HOT_OVERWORLD) || biome.is(DRY) || biome.is(DRY_OVERWORLD) || biome.is(BiomeTags.IS_BADLANDS) || biome.is(BiomeTags.IS_SAVANNA)) return 0.34F;
-        return 0.16F;
+        if (biome.is(WET) || biome.is(WET_OVERWORLD) || biome.is(OCEAN) || biome.is(BiomeTags.IS_JUNGLE)) return 0.10F;
+        if (biome.is(COLD) || biome.is(COLD_OVERWORLD) || biome.is(MOUNTAIN) || biome.is(BiomeTags.IS_TAIGA)) return 0.18F;
+        if (biome.is(HOT) || biome.is(HOT_OVERWORLD) || biome.is(DRY) || biome.is(DRY_OVERWORLD) || biome.is(BiomeTags.IS_BADLANDS) || biome.is(BiomeTags.IS_SAVANNA)) return 0.56F;
+        return 0.28F;
     }
 
     private static float weatherCompression(ClimateSnapshot.WeatherState weatherState, boolean exposedToSky) {
@@ -269,25 +322,77 @@ public final class ClimateService {
 
     public static ClimateSnapshot.PrecipitationKind precipitationKind(Holder<Biome> biome, float minecraftTemperature) {
         if (!biome.value().hasPrecipitation()) return ClimateSnapshot.PrecipitationKind.NONE;
-        return minecraftTemperature < 0.15F ? ClimateSnapshot.PrecipitationKind.SNOW : ClimateSnapshot.PrecipitationKind.RAIN;
+        return minecraftTemperature < SNOW_THRESHOLD ? ClimateSnapshot.PrecipitationKind.SNOW : ClimateSnapshot.PrecipitationKind.RAIN;
+    }
+
+    public static Biome.Precipitation vanillaPrecipitationAt(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
+        if (!biome.value().hasPrecipitation()) return Biome.Precipitation.NONE;
+        if (!(levelReader instanceof Level level)) return biome.value().getPrecipitationAt(pos);
+        return switch (precipitationKind(biome, snapshot(level, biome, pos, true).outdoorMinecraftTemperature())) {
+            case NONE -> Biome.Precipitation.NONE;
+            case RAIN -> Biome.Precipitation.RAIN;
+            case SNOW -> Biome.Precipitation.SNOW;
+        };
+    }
+
+    public static boolean shouldFreeze(LevelReader levelReader, Holder<Biome> biome, BlockPos water) {
+        return shouldFreeze(levelReader, biome, water, true);
+    }
+
+    public static boolean shouldFreeze(LevelReader levelReader, Holder<Biome> biome, BlockPos water, boolean mustBeAtEdge) {
+        if (warmEnoughToRain(levelReader, biome, water)) return false;
+        if (water.getY() < levelReader.getMinBuildHeight()
+                || water.getY() >= levelReader.getMaxBuildHeight()
+                || levelReader.getBrightness(LightLayer.BLOCK, water) >= 10) {
+            return false;
+        }
+
+        BlockState blockState = levelReader.getBlockState(water);
+        FluidState fluidState = levelReader.getFluidState(water);
+        if (fluidState.getType() != Fluids.WATER || !(blockState.getBlock() instanceof LiquidBlock)) return false;
+        if (!mustBeAtEdge) return true;
+
+        boolean surroundedByWater = levelReader.isWaterAt(water.west())
+                && levelReader.isWaterAt(water.east())
+                && levelReader.isWaterAt(water.north())
+                && levelReader.isWaterAt(water.south());
+        return !surroundedByWater;
+    }
+
+    public static boolean shouldSnow(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
+        if (warmEnoughToRain(levelReader, biome, pos)) return false;
+        if (pos.getY() < levelReader.getMinBuildHeight()
+                || pos.getY() >= levelReader.getMaxBuildHeight()
+                || levelReader.getBrightness(LightLayer.BLOCK, pos) >= 10) {
+            return false;
+        }
+
+        BlockState blockState = levelReader.getBlockState(pos);
+        return (blockState.isAir() || blockState.is(Blocks.SNOW))
+                && Blocks.SNOW.defaultBlockState().canSurvive(levelReader, pos);
+    }
+
+    public static boolean warmEnoughToRain(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
+        if (!(levelReader instanceof Level level)) return biome.value().warmEnoughToRain(pos);
+        return snapshot(level, biome, pos, true).outdoorMinecraftTemperature() >= SNOW_THRESHOLD;
     }
 
     public static ClimateSnapshot.SnowBehavior snowBehavior(float minecraftTemperature) {
-        if (minecraftTemperature < -0.15F) return ClimateSnapshot.SnowBehavior.PERSISTENT;
-        if (minecraftTemperature < 0.15F) return ClimateSnapshot.SnowBehavior.TRANSITIONAL_SURFACE;
+        if (minecraftTemperature < PERSISTENT_SNOW_THRESHOLD) return ClimateSnapshot.SnowBehavior.PERSISTENT;
+        if (minecraftTemperature < SNOW_THRESHOLD) return ClimateSnapshot.SnowBehavior.TRANSITIONAL_SURFACE;
         return ClimateSnapshot.SnowBehavior.MELTS;
     }
 
     public static double estimatedCelsius(float minecraftTemperature) {
-        return Math.round((((double) minecraftTemperature - 0.15D) * 40.0D - 3.0D) * 10.0D) / 10.0D;
+        return Math.round((minecraftTemperature * COLD_SWEAT_CELSIUS_PER_MC) * 10.0D) / 10.0D;
     }
 
     public static float minecraftTemperatureFromCelsius(double celsius) {
-        return (float) ((celsius + 3.0D) / 40.0D + 0.15D);
+        return (float) (celsius / COLD_SWEAT_CELSIUS_PER_MC);
     }
 
     public static float celsiusOffsetToMinecraftTemperatureOffset(double celsiusOffset) {
-        return (float) (celsiusOffset / 40.0D);
+        return (float) (celsiusOffset / COLD_SWEAT_CELSIUS_PER_MC);
     }
 
     public static void setDebugWeatherOffsetCelsius(double celsiusOffset) {
@@ -303,7 +408,7 @@ public final class ClimateService {
     }
 
     public static double debugWeatherOffsetCelsius() {
-        return hasDebugWeatherOffset() ? debugWeatherOffset * 40.0D : 0.0D;
+        return hasDebugWeatherOffset() ? debugWeatherOffset * COLD_SWEAT_CELSIUS_PER_MC : 0.0D;
     }
 
     public record ClimateBreakdown(

@@ -56,13 +56,13 @@ public final class ClimateAuditReporter {
             new WeatherSample("rain", true)
     );
     private static final Sample SPAWN_SURFACE_SAMPLE = new Sample("surface", new BlockPos(0, 64, 0), true, 0.0F);
-    private static final float UNDEAD_COLD_THRESHOLD = 0.15F;
-    private static final float UNDEAD_COLD_RAMP = 0.35F;
+    private static final float UNDEAD_COLD_THRESHOLD = 3.0F / 25.0F;
+    private static final float UNDEAD_COLD_RAMP = 0.48F;
     private static final float RAIN_STRAY_UNDEAD_FACTOR = 0.12F;
     private static final float MIN_MEANINGFUL_SPAWN_FACTOR = 0.08F;
     private static final float MIN_MEANINGFUL_SPIDER_FACTOR = 0.20F;
-    private static final float CREEPER_HEAT_START = 0.55F;
-    private static final float CREEPER_HEAT_FULL = 1.15F;
+    private static final float CREEPER_HEAT_START = 20.0F / 25.0F;
+    private static final float CREEPER_HEAT_FULL = 37.0F / 25.0F;
     private static final float MIN_MEANINGFUL_CREEPER_FACTOR = 0.08F;
 
     private ClimateAuditReporter() {
@@ -323,10 +323,10 @@ public final class ClimateAuditReporter {
             flags.add("hot_cold_archetype_summer");
         }
         if (exposedToSky && coldSweatOutdoor != null && coldSweatOutdoor.noonC() > 3.0D && snapshot.snowBehavior() != ClimateSnapshot.SnowBehavior.MELTS) {
-            flags.add("cold_sweat_noon_snow_above_3c");
+            flags.add("cold_sweat_config_noon_snow_above_3c");
         }
         if (exposedToSky && coldSweatOutdoor != null && coldSweatOutdoor.nightC() < -3.0D && snapshot.precipitationKind() == ClimateSnapshot.PrecipitationKind.RAIN) {
-            flags.add("cold_sweat_night_rain_below_minus_3c");
+            flags.add("cold_sweat_config_night_rain_below_minus_3c");
         }
         return flags;
     }
@@ -563,12 +563,13 @@ public final class ClimateAuditReporter {
         appendSummary(sb, "Rows By Phase", report.rowsByPhase());
         appendSummary(sb, "Rows By Archetype", report.rowsByArchetype());
         appendSummary(sb, "Flags", report.flags());
+        sb.append("Cold Sweat config columns are the static config values before the Arctic Nights runtime outdoor-climate modifier. Use `Est C` for the authoritative Arctic Nights outdoor temperature used by snow, spawn ecology, and the live Cold Sweat modifier.\n\n");
         sb.append("## Flagged Rows\n\n");
         if (report.flaggedRowCount() == 0) {
             sb.append("_None._\n");
             return sb.toString();
         }
-        sb.append("| Biome | Phase | Tier | Archetype | Season | Weather | Sample | MC Temp | Est C | CS Night | CS Noon | CS Mid | Precip | Snow | Undead | Creeper | Flags |\n");
+        sb.append("| Biome | Phase | Tier | Archetype | Season | Weather | Sample | MC Temp | Est C | CS Config Night | CS Config Noon | CS Config Mid | Precip | Snow | Undead | Creeper | Flags |\n");
         sb.append("|---|---:|---|---|---|---|---|---:|---:|---:|---:|---:|---|---|---:|---:|---|\n");
         for (ClimateAuditRow row : report.rows()) {
             if (row.flags().isEmpty()) continue;
@@ -605,7 +606,7 @@ public final class ClimateAuditReporter {
 
     private static String toCsv(ClimateAuditReport report) {
         StringBuilder sb = new StringBuilder();
-        sb.append("biome,phase,tier,archetype,season,weather,sample,x,y,z,exposed,climate_tags,minecraft_temperature,estimated_celsius,cold_sweat_night_c,cold_sweat_noon_c,cold_sweat_outdoor_c,rain_cooling,precipitation,snow_behavior,undead_factor,creeper_factor,flags\n");
+        sb.append("biome,phase,tier,archetype,season,weather,sample,x,y,z,exposed,climate_tags,minecraft_temperature,estimated_celsius,cold_sweat_config_night_c,cold_sweat_config_noon_c,cold_sweat_config_outdoor_c,rain_cooling,precipitation,snow_behavior,undead_factor,creeper_factor,flags\n");
         for (ClimateAuditRow row : report.rows()) {
             sb.append(csv(row.biome())).append(',')
                     .append(row.phase() == null ? "" : row.phase()).append(',')

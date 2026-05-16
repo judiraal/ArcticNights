@@ -24,13 +24,13 @@ import sereneseasons.api.season.SeasonHelper;
 import javax.annotation.Nullable;
 
 public class ArcticSpawner {
-    private static final float UNDEAD_COLD_THRESHOLD = 0.15F;
+    private static final float UNDEAD_COLD_THRESHOLD = 3.0F / 25.0F;
     private static final float RAIN_STRAY_UNDEAD_FACTOR = 0.12F;
-    private static final float UNDEAD_COLD_RAMP = 0.35F;
+    private static final float UNDEAD_COLD_RAMP = 0.48F;
     private static final float MIN_MEANINGFUL_SPAWN_FACTOR = 0.08F;
     private static final float MIN_MEANINGFUL_SPIDER_FACTOR = 0.20F;
-    private static final float CREEPER_HEAT_START = 0.55F;
-    private static final float CREEPER_HEAT_FULL = 1.15F;
+    private static final float CREEPER_HEAT_START = 20.0F / 25.0F;
+    private static final float CREEPER_HEAT_FULL = 37.0F / 25.0F;
     private static final float MIN_MEANINGFUL_CREEPER_FACTOR = 0.08F;
     private static final int LAVA_LAKE_HORIZONTAL_RADIUS = 9;
     private static final int LAVA_LAKE_HORIZONTAL_STEP = 3;
