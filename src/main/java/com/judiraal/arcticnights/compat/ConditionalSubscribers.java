@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableList;
 import com.judiraal.arcticnights.ArcticNights;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLLoader;
@@ -53,21 +54,40 @@ public final class ConditionalSubscribers {
     private static void inject(ModContainer modContainer, ModFileScanData.AnnotationData annotationData, Module layer) {
         try {
             Class<?> clazz = Class.forName(annotationData.clazz().getClassName(), true, layer.getClassLoader());
-            NeoForge.EVENT_BUS.register(clazz);
+            registerNeoForge(clazz);
             IEventBus modBus = modContainer.getEventBus();
             for (Class<?> subClass : clazz.getDeclaredClasses()) {
                 if ("ClientEvents".equals(subClass.getSimpleName()) && FMLEnvironment.dist == Dist.CLIENT) {
-                    NeoForge.EVENT_BUS.register(subClass);
+                    registerNeoForge(subClass);
                 }
                 if (modBus != null && "ModEvents".equals(subClass.getSimpleName())) {
-                    modBus.register(subClass);
+                    registerModBus(modBus, subClass);
                 }
                 if (modBus != null && "ClientModEvents".equals(subClass.getSimpleName()) && FMLEnvironment.dist == Dist.CLIENT) {
-                    modBus.register(subClass);
+                    registerModBus(modBus, subClass);
                 }
             }
         } catch (Throwable t) {
             ArcticNights.LOGGER.warn("Exception during conditional event bus subscription of {}", annotationData.targetType().name(), t);
         }
+    }
+
+    private static void registerNeoForge(Class<?> clazz) {
+        if (hasSubscribeEventMethods(clazz)) {
+            NeoForge.EVENT_BUS.register(clazz);
+        }
+    }
+
+    private static void registerModBus(IEventBus modBus, Class<?> clazz) {
+        if (hasSubscribeEventMethods(clazz)) {
+            modBus.register(clazz);
+        }
+    }
+
+    private static boolean hasSubscribeEventMethods(Class<?> clazz) {
+        for (var method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(SubscribeEvent.class)) return true;
+        }
+        return false;
     }
 }
