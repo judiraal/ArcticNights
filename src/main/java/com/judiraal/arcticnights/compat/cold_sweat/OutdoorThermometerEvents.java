@@ -1,5 +1,6 @@
 package com.judiraal.arcticnights.compat.cold_sweat;
 
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.compat.ConditionalEventBusSubscriber;
 import com.judiraal.arcticnights.network.OutdoorThermometerNetworking;
 import com.judiraal.arcticnights.util.ClimateService;
@@ -31,7 +32,9 @@ public final class OutdoorThermometerEvents {
             return;
         }
 
-        if (player.level().dimension() != Level.OVERWORLD || !ColdSweatCompat.showsAdvancedWorldTemperature(player)) {
+        if (!ArcticNightsFeatures.climateSystem()
+                || player.level().dimension() != Level.OVERWORLD
+                || !ColdSweatCompat.showsAdvancedWorldTemperature(player)) {
             clearIfNeeded(player);
             return;
         }

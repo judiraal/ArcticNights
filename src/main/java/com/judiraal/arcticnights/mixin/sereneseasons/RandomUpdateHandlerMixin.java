@@ -1,6 +1,6 @@
 package com.judiraal.arcticnights.mixin.sereneseasons;
 
-import com.judiraal.arcticnights.ArcticNightsConfig;
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.SnowMeltHandler;
 import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.server.level.ChunkMap;
@@ -20,7 +20,7 @@ public abstract class RandomUpdateHandlerMixin {
 
     @Redirect(method = "onWorldTick", at = @At(value = "INVOKE", target = "Lsereneseasons/season/RandomUpdateHandler;meltInChunk(Lnet/minecraft/server/level/ChunkMap;Lnet/minecraft/world/level/chunk/LevelChunk;F)V"))
     private static void arcticnights$meltInChunk(ChunkMap chunkMap, LevelChunk chunkIn, float meltChance, @Local(name = "seasonProperties") SeasonsConfig.SeasonProperties seasonProperties) {
-        if (ArcticNightsConfig.fullMelting.getAsBoolean())
+        if (ArcticNightsFeatures.fullMelting())
             SnowMeltHandler.meltInChunk(chunkIn, meltChance, seasonProperties);
         else
             meltInChunk(chunkMap, chunkIn, meltChance);

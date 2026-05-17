@@ -1,5 +1,6 @@
 package com.judiraal.arcticnights.mixin.cold_sweat;
 
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.client.ClientOutdoorThermometer;
 import com.momosoftworks.coldsweat.client.gui.Overlays;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -18,6 +19,7 @@ public abstract class TickOverlaysMixin {
             require = 1
     )
     private static double arcticnights$useOutdoorThermometer(double original) {
+        if (!ArcticNightsFeatures.climateSystem()) return original;
         return ClientOutdoorThermometer.minecraftTemperature().orElse(original);
     }
 }

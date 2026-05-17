@@ -24,7 +24,6 @@ import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLPaths;
-import sereneseasons.api.season.Season;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -76,6 +75,13 @@ public final class ClimateAuditReporter {
     private static final float CREEPER_HEAT_START = 20.0F / 25.0F;
     private static final float CREEPER_HEAT_FULL = 37.0F / 25.0F;
     private static final float MIN_MEANINGFUL_CREEPER_FACTOR = 0.08F;
+    // Mirrors Serene Seasons' 12-subseason cadence without linking the audit path to its API.
+    private static final String[] SUB_SEASON_NAMES = {
+            "early_spring", "mid_spring", "late_spring",
+            "early_summer", "mid_summer", "late_summer",
+            "early_autumn", "mid_autumn", "late_autumn",
+            "early_winter", "mid_winter", "late_winter"
+    };
 
     private ClimateAuditReporter() {
     }
@@ -113,7 +119,7 @@ public final class ClimateAuditReporter {
                                 for (LatitudeSample latitude : latitudeSamples()) {
                                     for (Sample sample : samples) {
                                         BlockPos pos = sample.pos(latitude);
-                                        ClimateSnapshot snapshot = ClimateService.auditSnapshot(level, holder, pos, sample.exposedToSky(), season.subSeason(), weather.weatherState(), time.dayTime());
+                                        ClimateSnapshot snapshot = ClimateService.auditSnapshot(level, holder, pos, sample.exposedToSky(), season.seasonFactor(), weather.weatherState(), time.dayTime());
                                         rows.add(row(biomeId, tags, tier, archetype, season, weather, time, latitude, sample, snapshot, coldSweat));
                                     }
                                 }
@@ -176,7 +182,7 @@ public final class ClimateAuditReporter {
                         for (WeatherSample weather : WEATHER_SAMPLES) {
                             for (LatitudeSample latitude : latitudeSamples()) {
                                 BlockPos pos = SPAWN_SURFACE_SAMPLE.pos(latitude);
-                                ClimateSnapshot snapshot = ClimateService.auditSnapshot(level, holder, pos, true, season.subSeason(), weather.weatherState(), SPAWN_TIME.dayTime());
+                                ClimateSnapshot snapshot = ClimateService.auditSnapshot(level, holder, pos, true, season.seasonFactor(), weather.weatherState(), SPAWN_TIME.dayTime());
                                 rows.add(spawnRow(biomeId, tags, holder, tier, archetype, season, weather, latitude, SPAWN_SURFACE_SAMPLE, SPAWN_TIME, snapshot, phaseEntityGates));
                             }
                         }
@@ -225,27 +231,39 @@ public final class ClimateAuditReporter {
     }
 
     private static List<SeasonSample> seasonSamples() {
-        if (!com.judiraal.arcticnights.ArcticNights.SERENE_SEASONS) {
-            return List.of(new SeasonSample("current", null));
+        if (!ArcticNights.SERENE_SEASONS) {
+            return List.of(new SeasonSample("current", null, null));
         }
-        Season.SubSeason[] seasons = Season.SubSeason.values();
         return List.of(
-                new SeasonSample("spring", seasons[Math.min(1, seasons.length - 1)]),
-                new SeasonSample("summer", seasons[Math.min(4, seasons.length - 1)]),
-                new SeasonSample("autumn", seasons[Math.min(7, seasons.length - 1)]),
-                new SeasonSample("winter", seasons[Math.min(10, seasons.length - 1)])
+                subSeasonSample("spring", 1),
+                subSeasonSample("summer", 4),
+                subSeasonSample("autumn", 7),
+                subSeasonSample("winter", 10)
         );
     }
 
     private static List<SeasonSample> allSubSeasonSamples() {
-        if (!com.judiraal.arcticnights.ArcticNights.SERENE_SEASONS) {
-            return List.of(new SeasonSample("current", null));
+        if (!ArcticNights.SERENE_SEASONS) {
+            return List.of(new SeasonSample("current", null, null));
         }
         List<SeasonSample> samples = new ArrayList<>();
-        for (Season.SubSeason subSeason : Season.SubSeason.values()) {
-            samples.add(new SeasonSample(subSeason.name().toLowerCase(Locale.ROOT), subSeason));
+        for (int ordinal = 0; ordinal < SUB_SEASON_NAMES.length; ordinal++) {
+            samples.add(subSeasonSample(ordinal));
         }
         return List.copyOf(samples);
+    }
+
+    private static SeasonSample subSeasonSample(String name, int ordinal) {
+        return new SeasonSample(name, seasonFactorForSubSeason(ordinal), ordinal);
+    }
+
+    private static SeasonSample subSeasonSample(int ordinal) {
+        return subSeasonSample(SUB_SEASON_NAMES[ordinal], ordinal);
+    }
+
+    private static float seasonFactorForSubSeason(int ordinal) {
+        float representativeDay = ordinal * 8.0F;
+        return Mth.cos((representativeDay - 32.0F) / 48.0F * Mth.PI);
     }
 
     private static ClimateAuditRow row(String biomeId, List<String> tags, SourceOrderTier tier, String archetype, SeasonSample season, WeatherSample weather, TimeSample time, LatitudeSample latitude, Sample sample, ClimateSnapshot snapshot, ColdSweatOutdoorConfig coldSweat) {
@@ -285,14 +303,14 @@ public final class ClimateAuditReporter {
         float spawnTemperature = spawnTemperature(snapshot);
         float undeadFactor = undeadFactor(tags, spawnTemperature, snapshot.clearOutdoorMinecraftTemperature(), 0.0F, snapshot.rainCooling());
         float creeperFactor = creeperFactor(tags, snapshot, 0.0F);
-        float spiderFactor = spiderFactor(season.subSeason(), snapshot, 0.0F);
+        float spiderFactor = spiderFactor(season.subSeasonOrdinal(), snapshot, 0.0F);
         BlockPos pos = sample.pos(latitude);
         List<SpawnEntry> baseEntries = baseMonsterEntries(biome);
         List<SpawnEntry> expectedEntries = new ArrayList<>();
         List<String> removedEntries = new ArrayList<>();
         boolean climateModified = false;
         for (SpawnEntry entry : baseEntries) {
-            float factor = spawnFactor(entry.type(), tags, spawnTemperature, snapshot, season.subSeason(), 0.0F);
+            float factor = spawnFactor(entry.type(), tags, spawnTemperature, snapshot, season.subSeasonOrdinal(), 0.0F);
             if (factor <= 0.0F) {
                 removedEntries.add(entry.id());
                 climateModified = true;
@@ -401,10 +419,10 @@ public final class ClimateAuditReporter {
         return factor < MIN_MEANINGFUL_CREEPER_FACTOR ? 0.0F : factor;
     }
 
-    private static float spiderFactor(Season.SubSeason subSeason, ClimateSnapshot snapshot, float caveFactor) {
+    private static float spiderFactor(Integer subSeasonOrdinal, ClimateSnapshot snapshot, float caveFactor) {
         float deepFactor = caveFactor >= 0.5F ? 1.0F : 0.0F;
         if (deepFactor > 0.0F) return deepFactor;
-        float seasonFactor = autumnProgressionFactor(subSeason);
+        float seasonFactor = autumnProgressionFactor(subSeasonOrdinal);
         if (seasonFactor <= 0.0F) return 0.0F;
         float temp = snapshot.outdoorMinecraftTemperature();
         float coolFactor = 1.0F - smoothStep(Mth.clamp((temp - 0.55F) / 0.35F, 0.0F, 1.0F));
@@ -415,9 +433,9 @@ public final class ClimateAuditReporter {
         return factor < MIN_MEANINGFUL_SPIDER_FACTOR ? 0.0F : factor;
     }
 
-    private static float autumnProgressionFactor(Season.SubSeason subSeason) {
-        if (subSeason == null) return 0.0F;
-        float representativeDay = subSeason.ordinal() * 8.0F + 4.0F;
+    private static float autumnProgressionFactor(Integer subSeasonOrdinal) {
+        if (subSeasonOrdinal == null) return 0.0F;
+        float representativeDay = subSeasonOrdinal * 8.0F + 4.0F;
         if (representativeDay < 40.0F) return 0.0F;
         if (representativeDay < 60.0F) return smoothStep((representativeDay - 40.0F) / 20.0F);
         if (representativeDay < 84.0F) return Mth.lerp(smoothStep((representativeDay - 60.0F) / 24.0F), 1.0F, 0.45F);
@@ -437,11 +455,11 @@ public final class ClimateAuditReporter {
         return RAIN_STRAY_UNDEAD_FACTOR * smoothStep(severity);
     }
 
-    private static float spawnFactor(EntityType<?> type, List<String> tags, float spawnTemperature, ClimateSnapshot snapshot, Season.SubSeason subSeason, float caveFactor) {
+    private static float spawnFactor(EntityType<?> type, List<String> tags, float spawnTemperature, ClimateSnapshot snapshot, Integer subSeasonOrdinal, float caveFactor) {
         if (type == EntityType.WITCH) return tags.contains("arcticnights:witch_wetlands") ? 1.0F : 0.0F;
         if (type.is(ArcticSpawner.REQUIRE_COLD)) return undeadFactor(tags, spawnTemperature, snapshot.clearOutdoorMinecraftTemperature(), caveFactor, snapshot.rainCooling());
         if (type.is(ArcticSpawner.REQUIRE_HOT)) return creeperFactor(tags, snapshot, caveFactor);
-        if (type.is(ArcticSpawner.REQUIRE_AUTUMN_OR_DEEP)) return spiderFactor(subSeason, snapshot, caveFactor);
+        if (type.is(ArcticSpawner.REQUIRE_AUTUMN_OR_DEEP)) return spiderFactor(subSeasonOrdinal, snapshot, caveFactor);
         return 1.0F;
     }
 
@@ -938,7 +956,7 @@ public final class ClimateAuditReporter {
         }
     }
 
-    private record SeasonSample(String name, Season.SubSeason subSeason) {
+    private record SeasonSample(String name, Float seasonFactor, Integer subSeasonOrdinal) {
     }
 
     private record TimeSample(String name, long dayTime) {

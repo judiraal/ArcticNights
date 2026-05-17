@@ -1,5 +1,6 @@
 package com.judiraal.arcticnights.mixin.weather2;
 
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.ClimateService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -17,6 +18,11 @@ import weather2.client.SceneEnhancer;
 public class SceneEnhancerMixin {
     @Redirect(method = "renderTick", at = @At(value = "INVOKE", target = "Lweather2/ClientWeatherHelper;controlVisuals(Z)V"))
     private static void arcticnights$letVanillaOwnOvercastVisuals(ClientWeatherHelper helper, boolean particlePrecipitation) {
+        if (!ArcticNightsFeatures.climateSystem()) {
+            helper.controlVisuals(particlePrecipitation);
+            return;
+        }
+
         var clientConfig = ClientTickHandler.clientConfigData;
         if (clientConfig != null && clientConfig.overcastMode) {
             return;
@@ -27,11 +33,13 @@ public class SceneEnhancerMixin {
 
     @Inject(method = "shouldRainHere", at = @At("HEAD"), cancellable = true)
     private static void arcticnights$shouldRainHere(Level level, Biome biome, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-        cir.setReturnValue(ClimateService.vanillaPrecipitationAt(level, level.getBiome(pos), pos) == Biome.Precipitation.RAIN);
+        if (!ArcticNightsFeatures.climateSystem()) return;
+        cir.setReturnValue(ClimateService.precipitationAtAsVanillaType(level, level.getBiome(pos), pos) == Biome.Precipitation.RAIN);
     }
 
     @Inject(method = "shouldSnowHere", at = @At("HEAD"), cancellable = true)
     private static void arcticnights$shouldSnowHere(Level level, Biome biome, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-        cir.setReturnValue(ClimateService.vanillaPrecipitationAt(level, level.getBiome(pos), pos) == Biome.Precipitation.SNOW);
+        if (!ArcticNightsFeatures.climateSystem()) return;
+        cir.setReturnValue(ClimateService.precipitationAtAsVanillaType(level, level.getBiome(pos), pos) == Biome.Precipitation.SNOW);
     }
 }

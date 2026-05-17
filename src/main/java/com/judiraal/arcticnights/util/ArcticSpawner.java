@@ -155,12 +155,19 @@ public class ArcticSpawner {
     }
 
     private static float autumnProgressionFactor(ServerLevel level) {
-        float day = SeasonsCompat.getYearDay(level);
+        float day = ArcticNights.SERENE_SEASONS ? SeasonsCompat.getYearDay(level) : fallbackYearDay(level);
         if (day < 40.0F) return 0.0F;
         if (day < 60.0F) return smoothStep((day - 40.0F) / 20.0F);
         if (day < 84.0F) return Mth.lerp(smoothStep((day - 60.0F) / 24.0F), 1.0F, 0.45F);
         if (day < 96.0F) return Mth.lerp(smoothStep((day - 84.0F) / 12.0F), 0.45F, 0.0F);
         return 0.0F;
+    }
+
+    private static float fallbackYearDay(ServerLevel level) {
+        int daysPerYear = ArcticNightsConfig.daysPerSeason.get() << 2;
+        if (daysPerYear <= 0) return 32.0F;
+        long day = level.getDayTime() / 24_000L;
+        return Math.floorMod(day * 96L / daysPerYear, 96L);
     }
 
     private static float smoothStep(float value) {
@@ -227,11 +234,7 @@ public class ArcticSpawner {
         }
 
         static float getYearDay(ServerLevel level) {
-            if (ArcticNights.SERENE_SEASONS) return getSeason(level).getDay();
-            int daysPerYear = ArcticNightsConfig.daysPerSeason.get() << 2;
-            if (daysPerYear <= 0) return 32.0F;
-            long day = level.getDayTime() / 24_000L;
-            return Math.floorMod(day * 96L / daysPerYear, 96L);
+            return getSeason(level).getDay();
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.judiraal.arcticnights.compat.cold_sweat;
 
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.ClimateService;
 import com.judiraal.arcticnights.util.ClimateSnapshot;
 import com.momosoftworks.coldsweat.api.temperature.modifier.TempModifier;
@@ -13,7 +14,9 @@ public class OutdoorClimateTempModifier extends TempModifier {
     @Override
     protected Function<Double, Double> calculate(LivingEntity entity, Temperature.Trait trait) {
         Level level = entity.level();
-        if (trait != Temperature.Trait.WORLD || level.dimension() != Level.OVERWORLD) {
+        if (!ArcticNightsFeatures.climateSystem()
+                || trait != Temperature.Trait.WORLD
+                || level.dimension() != Level.OVERWORLD) {
             return temperature -> temperature;
         }
 

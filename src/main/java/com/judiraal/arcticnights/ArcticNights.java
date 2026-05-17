@@ -67,12 +67,13 @@ public class ArcticNights {
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
+        if (!ArcticNightsFeatures.debugCommands()) return;
         ArcticNightsCommands.register(event.getDispatcher());
     }
 
     @SubscribeEvent
     public static void onSpawnClusterSize(SpawnClusterSizeEvent event) {
-        if (ArcticNightsConfig.arcticSpawning.isFalse()) return;
+        if (!ArcticNightsFeatures.arcticSpawning()) return;
         if (event.getEntity().level() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
             var factor = ArcticSpawner.spawnFactor(event.getEntity().getType(), event.getEntity().blockPosition(), level);
             if (factor > 0.0F && factor < 1.0F) event.setSize(Math.max(1, (int)(event.getSize() * factor)));
@@ -85,7 +86,7 @@ public class ArcticNights {
 
     @SubscribeEvent
     public static void onPotentialMobs(LevelEvent.PotentialSpawns event) {
-        if (ArcticNightsConfig.arcticSpawning.isFalse()) return;
+        if (!ArcticNightsFeatures.arcticSpawning()) return;
         if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD && event.getMobCategory() == MobCategory.MONSTER) {
             var totalWeight = 0;
             var removedWeight = 0;

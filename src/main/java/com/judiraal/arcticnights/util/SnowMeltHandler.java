@@ -1,5 +1,6 @@
 package com.judiraal.arcticnights.util;
 
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
@@ -20,6 +21,7 @@ import sereneseasons.api.season.Season;
 import sereneseasons.api.season.SeasonHelper;
 import sereneseasons.config.SeasonsConfig;
 import sereneseasons.init.ModTags;
+import sereneseasons.season.SeasonHooks;
 
 public final class SnowMeltHandler {
     private SnowMeltHandler() {}
@@ -81,10 +83,21 @@ public final class SnowMeltHandler {
         if (biomeHolder.is(Tags.Biomes.IS_CAVE)) return false;
         if (biomeHolder.is(ModTags.Biomes.BLACKLISTED_BIOMES) && !biomeHolder.is(Biomes.RIVER)) return false;
 
-        ClimateSnapshot snapshot = ClimateService.snapshot(level, biomeHolder, pos);
-        ClimateSnapshot.SnowBehavior snowBehavior = snapshot.snowBehavior();
-        if (snowBehavior == ClimateSnapshot.SnowBehavior.PERSISTENT) return false;
-        if (snowBehavior == ClimateSnapshot.SnowBehavior.TRANSITIONAL_SURFACE) {
+        if (ArcticNightsFeatures.fullMeltingUsesClimate()) {
+            ClimateSnapshot snapshot = ClimateService.snapshot(level, biomeHolder, pos);
+            ClimateSnapshot.SnowBehavior snowBehavior = snapshot.snowBehavior();
+            if (snowBehavior == ClimateSnapshot.SnowBehavior.PERSISTENT) return false;
+            if (snowBehavior == ClimateSnapshot.SnowBehavior.TRANSITIONAL_SURFACE) {
+                final int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, pos.getX(), pos.getZ());
+                return pos.getY() > surfaceY;
+            }
+
+            return true;
+        }
+
+        final float temp = SeasonHooks.getBiomeTemperatureInSeason(subSeason, biomeHolder, pos);
+        if (temp < -0.15F) return false;
+        if (temp < 0.15F) {
             final int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, pos.getX(), pos.getZ());
             return pos.getY() > surfaceY;
         }

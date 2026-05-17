@@ -1,7 +1,7 @@
 package com.judiraal.arcticnights.command;
 
 import com.judiraal.arcticnights.ArcticNights;
-import com.judiraal.arcticnights.compat.cold_sweat.ColdSweatDebug;
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.ClimateAuditReporter;
 import com.judiraal.arcticnights.util.ClimateService;
 import com.mojang.brigadier.arguments.FloatArgumentType;
@@ -18,6 +18,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Locale;
 
 public final class ArcticNightsCommands {
@@ -26,7 +27,7 @@ public final class ArcticNightsCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("arcticnights")
-                .requires(source -> source.hasPermission(2))
+                .requires(source -> ArcticNightsFeatures.debugCommands() && source.hasPermission(2))
                 .then(Commands.literal("climate")
                         .then(Commands.literal("debug")
                                 .executes(ArcticNightsCommands::debugClimate)
@@ -91,7 +92,7 @@ public final class ArcticNightsCommands {
         }
 
         try {
-            for (String line : ColdSweatDebug.describe(context.getSource(), level, pos)) {
+            for (String line : ColdSweatDebugBridge.describe(context.getSource(), level, pos)) {
                 context.getSource().sendSuccess(() -> Component.literal(line), false);
             }
         } catch (Throwable t) {
@@ -168,5 +169,15 @@ public final class ArcticNightsCommands {
 
     private static String signed(double value) {
         return String.format(Locale.ROOT, "%+.1f", value);
+    }
+
+    // Keeps Cold Sweat API references out of this command class until the mod-loaded guard passes.
+    private static final class ColdSweatDebugBridge {
+        private ColdSweatDebugBridge() {
+        }
+
+        private static List<String> describe(CommandSourceStack source, ServerLevel level, BlockPos pos) {
+            return com.judiraal.arcticnights.compat.cold_sweat.ColdSweatDebug.describe(source, level, pos);
+        }
     }
 }

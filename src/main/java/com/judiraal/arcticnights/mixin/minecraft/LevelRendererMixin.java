@@ -1,5 +1,6 @@
 package com.judiraal.arcticnights.mixin.minecraft;
 
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.Calculations;
 import com.judiraal.arcticnights.util.ClimateService;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -32,12 +33,14 @@ public class LevelRendererMixin {
     @Redirect(method = "renderSnowAndRain",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
     private Biome.Precipitation arcticnights$renderPrecipitationAt(Biome biome, BlockPos pos) {
-        return ClimateService.vanillaPrecipitationAt(this.level, this.level.getBiome(pos), pos);
+        if (!ArcticNightsFeatures.climateSystem()) return biome.getPrecipitationAt(pos);
+        return ClimateService.precipitationAtAsVanillaType(this.level, this.level.getBiome(pos), pos);
     }
 
     @Redirect(method = "tickRain",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
     private Biome.Precipitation arcticnights$tickRainPrecipitationAt(Biome biome, BlockPos pos) {
-        return ClimateService.vanillaPrecipitationAt(this.level, this.level.getBiome(pos), pos);
+        if (!ArcticNightsFeatures.climateSystem()) return biome.getPrecipitationAt(pos);
+        return ClimateService.precipitationAtAsVanillaType(this.level, this.level.getBiome(pos), pos);
     }
 }

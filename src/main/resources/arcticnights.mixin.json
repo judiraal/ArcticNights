@@ -22,7 +22,6 @@
     "minecraft.ServerLevelMixin",
     "minecraft.SnowLayerBlockMixin",
     "sereneseasons.RandomUpdateHandlerMixin",
-    "weather2.ClientWeatherProxyMixin",
     "weather2.TornadoHelperMixin",
     "weather2.WeatherCommandMixin"
   ],
@@ -35,6 +34,7 @@
     "minecraft.ItemPropertiesMixin",
     "minecraft.LevelMixin",
     "minecraft.LevelRendererMixin",
+    "weather2.ClientWeatherProxyMixin",
     "weather2.ClientWeatherHelperMixin",
     "weather2.SceneEnhancerMixin"
   ]

@@ -1,5 +1,6 @@
 package com.judiraal.arcticnights.mixin.minecraft;
 
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.ClimateService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -14,6 +15,7 @@ public class ServerLevelMixin {
     @Redirect(method = "tickPrecipitation",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;shouldFreeze(Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;)Z"))
     private boolean arcticnights$shouldFreeze(Biome biome, LevelReader levelReader, BlockPos pos) {
+        if (!ArcticNightsFeatures.climateSystem()) return biome.shouldFreeze(levelReader, pos);
         ServerLevel level = (ServerLevel) (Object) this;
         return ClimateService.shouldFreeze(level, level.getBiome(pos), pos);
     }
@@ -21,6 +23,7 @@ public class ServerLevelMixin {
     @Redirect(method = "tickPrecipitation",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;shouldSnow(Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;)Z"))
     private boolean arcticnights$shouldSnow(Biome biome, LevelReader levelReader, BlockPos pos) {
+        if (!ArcticNightsFeatures.climateSystem()) return biome.shouldSnow(levelReader, pos);
         ServerLevel level = (ServerLevel) (Object) this;
         return ClimateService.shouldSnow(level, level.getBiome(pos), pos);
     }
@@ -28,7 +31,8 @@ public class ServerLevelMixin {
     @Redirect(method = "tickPrecipitation",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
     private Biome.Precipitation arcticnights$precipitationAt(Biome biome, BlockPos pos) {
+        if (!ArcticNightsFeatures.climateSystem()) return biome.getPrecipitationAt(pos);
         ServerLevel level = (ServerLevel) (Object) this;
-        return ClimateService.vanillaPrecipitationAt(level, level.getBiome(pos), pos);
+        return ClimateService.precipitationAtAsVanillaType(level, level.getBiome(pos), pos);
     }
 }

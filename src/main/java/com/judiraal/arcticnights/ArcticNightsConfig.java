@@ -5,7 +5,6 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Predicate;
 
 public class ArcticNightsConfig {
     public static final ArcticNightsConfig CONFIG;
@@ -27,6 +26,8 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.ConfigValue<List<? extends Integer>> structureDenyRange;
     public static ModConfigSpec.ConfigValue<List<? extends String>> structureDenyAllowlist;
     public static ModConfigSpec.BooleanValue arcticSpawning;
+    public static ModConfigSpec.BooleanValue climateSystem;
+    public static ModConfigSpec.BooleanValue debugCommands;
     public static ModConfigSpec.BooleanValue fullMelting;
     public static ModConfigSpec.BooleanValue alternativeTornadoStrengthGrabbing;
 
@@ -61,6 +62,12 @@ public class ArcticNightsConfig {
                 .defineListAllowEmpty("structureDenyAllowlist", List::of, () -> "", value -> value instanceof String);
         arcticSpawning = builder.comment("Enable tag-based seasonal spawning rules, e.g. require cold for undead, require heat for creepers, autumn for spiders, etc.")
                 .define("arcticSpawning", false);
+        climateSystem = builder.comment("Enable Arctic Nights as the runtime outdoor climate authority for precipitation, snow/ice behavior, Weather2 visuals, and Cold Sweat outdoor WORLD temperature.",
+                        "When disabled, existing vanilla/Serene Seasons/Weather2/Cold Sweat behavior is preserved.")
+                .define("climateSystem", false);
+        debugCommands = builder.comment("Enable /arcticnights debug and audit commands.",
+                        "Commands are disabled by default because they only serve diagnostics.")
+                .define("debugCommands", false);
         fullMelting = builder.comment("Enable alternative snow melting algorithm that can melt full snow blocks left by other mods, requires Serene Seasons to work.")
                 .define("fullMelting", false);
         alternativeTornadoStrengthGrabbing = builder.comment("Enable alternative tornado strength grabbing, limiting debug output, optimizing performance and allowing more blocks to grab.")

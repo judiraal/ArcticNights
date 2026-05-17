@@ -1,6 +1,6 @@
 package com.judiraal.arcticnights.mixin.minecraft;
 
-import com.judiraal.arcticnights.ArcticNightsConfig;
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.SnowMeltHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class FrostedIceBlockMixin {
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void arcticnights$cancelWarmLightMeltInFrozenClimate(BlockState state, ServerLevel level, BlockPos pos, RandomSource random, CallbackInfo ci) {
-        if (ArcticNightsConfig.fullMelting.getAsBoolean() && !SnowMeltHandler.shouldMeltAt(level, pos)) {
+        if (ArcticNightsFeatures.fullMeltingUsesClimate() && !SnowMeltHandler.shouldMeltAt(level, pos)) {
             level.scheduleTick(pos, (FrostedIceBlock) (Object) this, Mth.nextInt(random, 600, 1200));
             ci.cancel();
         }

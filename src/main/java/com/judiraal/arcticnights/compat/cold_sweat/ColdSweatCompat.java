@@ -1,6 +1,7 @@
 package com.judiraal.arcticnights.compat.cold_sweat;
 
 import com.judiraal.arcticnights.ArcticNights;
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.compat.ConditionalEventBusSubscriber;
 import com.momosoftworks.coldsweat.api.event.core.init.DefaultTempModifiersEvent;
 import com.momosoftworks.coldsweat.api.event.core.registry.TempModifierRegisterEvent;
@@ -34,6 +35,7 @@ public final class ColdSweatCompat {
     public static void addDefaultModifiers(DefaultTempModifiersEvent event) {
         event.removeModifiers(Temperature.Trait.WORLD, modifier ->
                 OUTDOOR_CLIMATE_MODIFIER.equals(modifier.getID()) || modifier instanceof OutdoorClimateTempModifier);
+        if (!ArcticNightsFeatures.climateSystem()) return;
 
         Placement placement = Placement
                 .of(Mode.ADD_AFTER, Order.FIRST, modifier -> modifier instanceof BiomeTempModifier)
@@ -49,10 +51,11 @@ public final class ColdSweatCompat {
     }
 
     public static boolean showsAdvancedWorldTemperature(Player player) {
-        return !ConfigSettings.REQUIRE_THERMOMETER.get()
-                || player.isCreative()
-                || player.getInventory().items.stream().limit(9).anyMatch(stack -> stack.getItem() == ModItems.THERMOMETER.value())
-                || player.getOffhandItem().getItem() == ModItems.THERMOMETER.value()
+        if (!ConfigSettings.REQUIRE_THERMOMETER.get() || player.isCreative()) return true;
+        for (int slot = 0; slot < 9; slot++) {
+            if (player.getInventory().items.get(slot).getItem() == ModItems.THERMOMETER.value()) return true;
+        }
+        return player.getOffhandItem().getItem() == ModItems.THERMOMETER.value()
                 || CompatManager.Curios.hasCurio(player, ModItems.THERMOMETER.value());
     }
 }

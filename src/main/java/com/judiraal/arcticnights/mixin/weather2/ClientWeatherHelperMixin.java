@@ -1,5 +1,6 @@
 package com.judiraal.arcticnights.mixin.weather2;
 
+import com.judiraal.arcticnights.ArcticNightsFeatures;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
@@ -9,6 +10,6 @@ import weather2.ClientWeatherHelper;
 public class ClientWeatherHelperMixin {
     @ModifyConstant(method = "controlVisuals", constant = @Constant(floatValue = 0.5F))
     private float arcticnights$restoreVanillaRainDarkening(float original) {
-        return 1.0F;
+        return ArcticNightsFeatures.climateSystem() ? 1.0F : original;
     }
 }
