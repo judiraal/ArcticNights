@@ -333,6 +333,10 @@ public final class ClimateService {
         };
     }
 
+    public static boolean hasSnowPrecipitation(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
+        return precipitationAtAsVanillaType(levelReader, biome, pos) == Biome.Precipitation.SNOW;
+    }
+
     public static boolean shouldFreeze(LevelReader levelReader, Holder<Biome> biome, BlockPos water) {
         return shouldFreeze(levelReader, biome, water, true);
     }

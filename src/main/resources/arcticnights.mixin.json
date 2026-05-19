@@ -23,11 +23,12 @@
     "minecraft.SnowLayerBlockMixin",
     "sereneseasons.RandomUpdateHandlerMixin",
     "weather2.TornadoHelperMixin",
-    "weather2.WeatherCommandMixin"
+    "weather2.WeatherCommandMixin",
+    "weather2.WeatherObjectParticleStormMixin"
   ],
   "minVersion": "0.8",
   "client": [
-    "cold_sweat.TickOverlaysMixin",
+    "cold_sweat.WorldTemperatureReadoutMixin",
     "iris.IrisRenderingPipelineMixin",
     "minecraft.ClientLevelMixin",
     "minecraft.FogRendererMixin",
