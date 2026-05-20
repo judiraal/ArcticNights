@@ -1,11 +1,16 @@
 package com.judiraal.arcticnights.util;
 
 import com.judiraal.arcticnights.ArcticNightsFeatures;
+import com.judiraal.arcticnights.mixin.minecraft.ChunkMapAccessor;
+import com.judiraal.arcticnights.mixin.minecraft.ServerChunkCacheAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
+import net.minecraft.server.level.ChunkHolder;
+import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
@@ -24,9 +29,37 @@ import sereneseasons.init.ModTags;
 import sereneseasons.season.SeasonHooks;
 
 public final class SnowMeltHandler {
+    private static final float CLIMATE_MELT_CHANCE = 1.0F / 16.0F;
+
     private SnowMeltHandler() {}
 
     public static void meltInChunk(LevelChunk chunkIn, float meltChance, SeasonsConfig.SeasonProperties seasonProperties) {
+        meltInChunk(chunkIn, meltChance, seasonProperties.subSeason());
+    }
+
+    public static void meltClimateInLoadedChunks(ServerLevel level) {
+        int rolls = level.getGameRules().getInt(GameRules.RULE_RANDOMTICKING);
+        if (rolls <= 0) return;
+
+        ChunkMap chunkMap = ((ServerChunkCacheAccessor) level.getChunkSource()).arcticnights$chunkMap();
+        Season.SubSeason subSeason = getSubSeason(level);
+
+        ChunkMapAccessor chunkMapAccessor = (ChunkMapAccessor) chunkMap;
+        for (ChunkHolder holder : chunkMapAccessor.arcticnights$getChunks()) {
+            LevelChunk chunk = holder.getTickingChunk();
+            if (chunk == null) continue;
+
+            ChunkPos chunkPos = chunk.getPos();
+            if (!chunkMapAccessor.arcticnights$anyPlayerCloseEnoughForSpawning(chunkPos)
+                    || !level.shouldTickBlocksAt(chunkPos.toLong())) continue;
+
+            for (int roll = 0; roll < rolls; roll++) {
+                meltInChunk(chunk, CLIMATE_MELT_CHANCE, subSeason);
+            }
+        }
+    }
+
+    private static void meltInChunk(LevelChunk chunkIn, float meltChance, Season.SubSeason subSeason) {
         final ServerLevel level = (ServerLevel) chunkIn.getLevel();
 
         if (meltChance <= 0.0F || level.random.nextFloat() >= meltChance) return;
@@ -46,7 +79,7 @@ public final class SnowMeltHandler {
             surfaceState = level.getBlockState(surfacePos);
         }
 
-        if (!shouldMeltAt(level, surfacePos, seasonProperties.subSeason())) return;
+        if (!shouldMeltAt(level, surfacePos, subSeason)) return;
         doMelt(surfaceState, level, surfacePos);
         tryMeltDown(level, surfacePos, 1);
     }
