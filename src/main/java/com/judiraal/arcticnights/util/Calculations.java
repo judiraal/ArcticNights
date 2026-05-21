@@ -16,6 +16,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.joml.Quaternionf;
 import sereneseasons.api.season.ISeasonState;
 
+import java.util.WeakHashMap;
+
 import static net.minecraft.world.level.block.state.properties.BlockStateProperties.INVERTED;
 import static net.minecraft.world.level.block.state.properties.BlockStateProperties.POWER;
 
@@ -74,6 +76,8 @@ public class Calculations {
      * @return float between 1 (summer) and -1 (winter)
       */
     public static float seasonalFactor(Level level) {
+        if (!ArcticNights.appliesTo(level)) return 0.0F;
+
         int day = 80;
         int dpy = ArcticNightsConfig.daysPerSeason.get() << 2;
         if (dpy > 0) {
@@ -111,10 +115,48 @@ public class Calculations {
     }
 
     private static class SereneSeasonsCompat {
+        private static final long MAX_CACHE_TICKS = 20L;
         private static final SereneSeasonsCompat HOLDER = new SereneSeasonsCompat();
+        private final WeakHashMap<Level, SeasonDayCache> dayCache = new WeakHashMap<>();
 
         int getDay(Level level) {
-            return sereneseasons.api.season.SeasonHelper.getSeasonState(level).getDay();
+            long gameTime = level.getGameTime();
+            long dayTime = level.getDayTime();
+            synchronized (this.dayCache) {
+                SeasonDayCache cache = this.dayCache.get(level);
+                if (cache == null) {
+                    cache = new SeasonDayCache();
+                    this.dayCache.put(level, cache);
+                }
+                if (cache.isExpired(gameTime, dayTime)) {
+                    cache.update(level, gameTime, dayTime);
+                }
+                return cache.day;
+            }
+        }
+
+        private static final class SeasonDayCache {
+            private long expireGameTime = Long.MIN_VALUE;
+            private long cachedDayTime = Long.MIN_VALUE;
+            private long expireDayTime = Long.MIN_VALUE;
+            private int day;
+
+            boolean isExpired(long gameTime, long dayTime) {
+                return gameTime >= this.expireGameTime
+                        || dayTime < this.cachedDayTime
+                        || dayTime >= this.expireDayTime;
+            }
+
+            void update(Level level, long gameTime, long dayTime) {
+                ISeasonState state = sereneseasons.api.season.SeasonHelper.getSeasonState(level);
+                int dayDuration = Math.max(1, state.getDayDuration());
+                long ticksUntilNextSeasonDay = dayDuration - Math.floorMod(state.getSeasonCycleTicks(), dayDuration);
+
+                this.day = state.getDay();
+                this.cachedDayTime = dayTime;
+                this.expireDayTime = dayTime + ticksUntilNextSeasonDay;
+                this.expireGameTime = gameTime + Math.min(ticksUntilNextSeasonDay, MAX_CACHE_TICKS);
+            }
         }
     }
 

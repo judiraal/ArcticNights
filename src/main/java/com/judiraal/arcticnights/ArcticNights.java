@@ -48,6 +48,10 @@ public class ArcticNights {
         return FMLLoader.getLoadingModList().getModFileById(modName) != null;
     }
 
+    public static boolean appliesTo(Level level) {
+        return level.dimension() == Level.OVERWORLD;
+    }
+
     public ArcticNights(IEventBus modEventBus, ModContainer modContainer) {
         ConditionalSubscribers.inject(modContainer);
         modContainer.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
@@ -57,7 +61,7 @@ public class ArcticNights {
     @SubscribeEvent
     public static void onLevelLoad(LevelEvent.Load event) {
         if (ArcticNightsConfig.firstTimeOfDay.get() > 0 && event.getLevel() instanceof ServerLevel serverLevel &&
-                serverLevel.getGameTime() == 0 && serverLevel.dimension() == Level.OVERWORLD &&
+                serverLevel.getGameTime() == 0 && appliesTo(serverLevel) &&
                 serverLevel.getLevelData() instanceof ServerLevelData data) {
             data.setDayTime(ArcticNightsConfig.firstTimeOfDay.get());
         }
@@ -72,7 +76,7 @@ public class ArcticNights {
     @SubscribeEvent
     public static void onSpawnClusterSize(SpawnClusterSizeEvent event) {
         if (!ArcticNightsFeatures.arcticSpawning()) return;
-        if (event.getEntity().level() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
+        if (event.getEntity().level() instanceof ServerLevel level && appliesTo(level)) {
             var factor = ArcticSpawner.spawnFactor(event.getEntity().getType(), event.getEntity().blockPosition(), level);
             if (factor > 0.0F && factor < 1.0F) event.setSize(Math.max(1, (int)(event.getSize() * factor)));
             else if (factor > 1.0F) {
@@ -85,7 +89,7 @@ public class ArcticNights {
     @SubscribeEvent
     public static void onPotentialMobs(LevelEvent.PotentialSpawns event) {
         if (!ArcticNightsFeatures.arcticSpawning()) return;
-        if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD && event.getMobCategory() == MobCategory.MONSTER) {
+        if (event.getLevel() instanceof ServerLevel level && appliesTo(level) && event.getMobCategory() == MobCategory.MONSTER) {
             var totalWeight = 0;
             var removedWeight = 0;
 
