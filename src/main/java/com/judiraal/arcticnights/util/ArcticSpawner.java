@@ -6,6 +6,8 @@ import it.unimi.dsi.fastutil.longs.Long2ByteLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2FloatLinkedOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.LightLayer;
@@ -93,11 +95,40 @@ public class ArcticSpawner {
                     caveFactor
             );
         } else if (entityType.is(SpawnEcology.REQUIRE_HOT)) {
+            if (entityType == EntityType.CREEPER) return creeperSpawnProbe(pos, level).factor();
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
-            if (entityType == EntityType.CREEPER && isNearUndergroundLavaLake(level, pos)) return 1.0F;
             return SpawnEcology.creeperFactor(biome, ClimateService.outdoorMinecraftTemperature(level, biome, pos), getCaveFactor(level, pos));
         }
         return 1.0F;
+    }
+
+    public static CreeperSpawnProbe creeperSpawnProbe(BlockPos pos, ServerLevel level) {
+        var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
+        ResourceLocation biomeId = level.registryAccess().registryOrThrow(Registries.BIOME).getKey(biome.value());
+        float temperature = ClimateService.outdoorMinecraftTemperature(level, biome, pos);
+        float caveFactor = getCaveFactor(level, pos);
+        boolean nearUndergroundLavaLake = isNearUndergroundLavaLake(level, pos);
+        float factor = nearUndergroundLavaLake
+                ? 1.0F
+                : SpawnEcology.creeperFactor(biome, temperature, caveFactor);
+        return new CreeperSpawnProbe(
+                biomeId == null ? "unknown" : biomeId.toString(),
+                ClimateService.estimatedCelsius(temperature),
+                temperature,
+                caveFactor,
+                nearUndergroundLavaLake,
+                factor
+        );
+    }
+
+    public record CreeperSpawnProbe(
+            String biomeId,
+            double estimatedCelsius,
+            float minecraftTemperature,
+            float caveFactor,
+            boolean nearUndergroundLavaLake,
+            float factor
+    ) {
     }
 
     private static float autumnProgressionFactor(ServerLevel level) {

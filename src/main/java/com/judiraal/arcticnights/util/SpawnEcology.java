@@ -17,8 +17,10 @@ public final class SpawnEcology {
     private static final float UNDEAD_COLD_RAMP = 0.48F;
     private static final float MIN_MEANINGFUL_SPAWN_FACTOR = 0.08F;
     private static final float MIN_MEANINGFUL_SPIDER_FACTOR = 0.20F;
-    private static final float CREEPER_HEAT_START = 20.0F / 25.0F;
-    private static final float CREEPER_HEAT_FULL = 37.0F / 25.0F;
+    private static final float CREEPER_HEAT_START = 30.0F / 25.0F;
+    private static final float CREEPER_HEAT_ACCELERATE = 35.0F / 25.0F;
+    private static final float CREEPER_HEAT_FULL = 40.0F / 25.0F;
+    private static final float CREEPER_HEAT_ACCELERATE_FACTOR = 0.25F;
     private static final float MIN_MEANINGFUL_CREEPER_FACTOR = 0.08F;
 
     static final TagKey<Biome> COLD =
@@ -55,8 +57,17 @@ public final class SpawnEcology {
 
     public static float creeperFactor(Holder<Biome> biome, float outdoorMinecraftTemperature, float caveFactor) {
         if (biome.is(COLD)) return 0.0F;
-        float heatSeverity = smoothStep((outdoorMinecraftTemperature - CREEPER_HEAT_START) / (CREEPER_HEAT_FULL - CREEPER_HEAT_START));
-        float factor = Mth.lerp(caveFactor / 2.0F, heatSeverity * 2.0F, 1.0F);
+        if (outdoorMinecraftTemperature <= CREEPER_HEAT_START) return 0.0F;
+        float factor;
+        if (outdoorMinecraftTemperature < CREEPER_HEAT_ACCELERATE) {
+            float severity = smoothStep((outdoorMinecraftTemperature - CREEPER_HEAT_START)
+                    / (CREEPER_HEAT_ACCELERATE - CREEPER_HEAT_START));
+            factor = CREEPER_HEAT_ACCELERATE_FACTOR * severity;
+        } else {
+            float severity = smoothStep((outdoorMinecraftTemperature - CREEPER_HEAT_ACCELERATE)
+                    / (CREEPER_HEAT_FULL - CREEPER_HEAT_ACCELERATE));
+            factor = Mth.lerp(severity, CREEPER_HEAT_ACCELERATE_FACTOR, 2.0F);
+        }
         return factor < MIN_MEANINGFUL_CREEPER_FACTOR ? 0.0F : factor;
     }
 

@@ -5,6 +5,7 @@ import com.judiraal.arcticnights.compat.ConditionalSubscribers;
 import com.judiraal.arcticnights.util.ArcticSpawner;
 import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
 import com.mojang.logging.LogUtils;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -29,11 +30,14 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.common.data.internal.NeoForgeBiomeTagsProvider;
+import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.SpawnClusterSizeEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.slf4j.Logger;
+
+import java.util.Locale;
 
 @Mod(ArcticNights.MOD_ID)
 @EventBusSubscriber
@@ -84,6 +88,57 @@ public class ArcticNights {
                 event.setSize((int)(event.getSize() * correction));
             }
         }
+    }
+
+    @SubscribeEvent
+    public static void onSpawnPositionCheck(MobSpawnEvent.PositionCheck event) {
+        if (!ArcticNightsFeatures.arcticSpawning() || event.getSpawnType() != MobSpawnType.NATURAL) return;
+        ServerLevel level = event.getLevel().getLevel();
+        if (!appliesTo(level)) return;
+        BlockPos pos = event.getEntity().blockPosition();
+        if (event.getEntity().getType() == EntityType.CREEPER) {
+            var probe = ArcticSpawner.creeperSpawnProbe(pos, level);
+            if (probe.factor() == 0.0F) {
+                event.setResult(MobSpawnEvent.PositionCheck.Result.FAIL);
+                logCreeperSpawn("deny", event.getSpawnType(), pos, probe);
+            }
+        } else if (ArcticSpawner.spawnFactor(event.getEntity().getType(), pos, level) == 0.0F) {
+            event.setResult(MobSpawnEvent.PositionCheck.Result.FAIL);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onFinalizeSpawn(FinalizeSpawnEvent event) {
+        if (!ArcticNightsFeatures.debugCommands() || event.getEntity().getType() != EntityType.CREEPER) return;
+        ServerLevel level = event.getLevel().getLevel();
+        if (!appliesTo(level)) return;
+        BlockPos pos = event.getEntity().blockPosition();
+        logCreeperSpawn("finalize", event.getSpawnType(), pos, ArcticSpawner.creeperSpawnProbe(pos, level));
+    }
+
+    private static void logCreeperSpawn(String action, MobSpawnType spawnType, BlockPos pos, ArcticSpawner.CreeperSpawnProbe probe) {
+        if (!ArcticNightsFeatures.debugCommands()) return;
+        LOGGER.info("ANSPAWN creeper {} spawnType={} gate={} pos={} {} {} biome={} tempC={} mcTemp={} factor={} cave={} lava={}",
+                action,
+                spawnType,
+                ArcticNightsFeatures.arcticSpawning() ? "active" : "disabled",
+                pos.getX(),
+                pos.getY(),
+                pos.getZ(),
+                probe.biomeId(),
+                c(probe.estimatedCelsius()),
+                f(probe.minecraftTemperature()),
+                f(probe.factor()),
+                f(probe.caveFactor()),
+                probe.nearUndergroundLavaLake());
+    }
+
+    private static String c(double value) {
+        return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static String f(float value) {
+        return String.format(Locale.ROOT, "%.3f", value);
     }
 
     @SubscribeEvent
