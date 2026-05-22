@@ -74,8 +74,7 @@ public class ArcticSpawner {
             boolean rainCooling = false;
             if (isRainCooling(level, biome, pos)) {
                 rainCooling = true;
-                ClimateSnapshot snapshot = ClimateService.snapshot(level, biome, pos);
-                dryTemperature = snapshot.clearOutdoorMinecraftTemperature();
+                dryTemperature = ClimateService.clearOutdoorMinecraftTemperature(level, biome, pos);
             }
             return SpawnEcology.undeadFactor(biome, temp, dryTemperature, getCaveFactor(level, pos), rainCooling);
         } else if (entityType.is(SpawnEcology.REQUIRE_AUTUMN_OR_DEEP)) {
@@ -83,13 +82,20 @@ public class ArcticSpawner {
             var deepFactor = caveFactor >= 0.5F ? 1.0F : 0.0F;
             if (deepFactor > 0.0F) return deepFactor;
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
-            ClimateSnapshot snapshot = ClimateService.snapshot(level, biome, pos);
-            return SpawnEcology.spiderFactor(autumnProgressionFactor(level), snapshot, caveFactor);
+            boolean exposedToSky = ClimateService.isExposedToSky(level, pos);
+            ClimateSnapshot.WeatherState weatherState = ClimateService.weatherStateAt(level, biome, exposedToSky);
+            float temperature = ClimateService.outdoorMinecraftTemperature(level, biome, pos, exposedToSky, weatherState);
+            return SpawnEcology.spiderFactor(
+                    autumnProgressionFactor(level),
+                    temperature,
+                    weatherState != ClimateSnapshot.WeatherState.CLEAR,
+                    weatherState,
+                    caveFactor
+            );
         } else if (entityType.is(SpawnEcology.REQUIRE_HOT)) {
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
             if (entityType == EntityType.CREEPER && isNearUndergroundLavaLake(level, pos)) return 1.0F;
-            ClimateSnapshot snapshot = ClimateService.snapshot(level, biome, pos);
-            return SpawnEcology.creeperFactor(biome, snapshot, getCaveFactor(level, pos));
+            return SpawnEcology.creeperFactor(biome, ClimateService.outdoorMinecraftTemperature(level, biome, pos), getCaveFactor(level, pos));
         }
         return 1.0F;
     }
