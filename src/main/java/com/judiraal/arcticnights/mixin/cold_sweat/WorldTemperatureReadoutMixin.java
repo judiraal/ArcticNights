@@ -10,8 +10,6 @@ import net.minecraft.client.player.LocalPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
-import java.util.OptionalDouble;
-
 @Mixin(value = Overlays.class, remap = false)
 public abstract class WorldTemperatureReadoutMixin {
     @ModifyExpressionValue(
@@ -22,18 +20,19 @@ public abstract class WorldTemperatureReadoutMixin {
             ),
             require = 1
     )
-    private static double arcticnights$useMeasuredThermometerReadout(double original) {
+    private static double arcticnights$hideFeltOnlyWorldReadoutDelta(double original) {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return original;
 
-        OptionalDouble measuredTemperature = ThermometerReadoutTemperature.measuredMinecraftTemperature(player);
-        if (measuredTemperature.isEmpty()) return original;
+        double delta = ThermometerReadoutTemperature.feltOnlyMinecraftDeltaOrZero(player);
+        if (delta == 0.0D) return original;
 
-        return Temperature.convert(
-                measuredTemperature.getAsDouble(),
+        double unitDelta = Temperature.convert(
+                delta,
                 Temperature.Units.MC,
                 ConfigSettings.UNITS.get(),
-                true
+                false
         );
+        return original - unitDelta;
     }
 }

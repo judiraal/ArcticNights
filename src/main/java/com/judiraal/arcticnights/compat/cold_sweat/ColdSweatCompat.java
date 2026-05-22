@@ -6,6 +6,7 @@ import com.judiraal.arcticnights.compat.ConditionalEventBusSubscriber;
 import com.momosoftworks.coldsweat.api.event.core.init.DefaultTempModifiersEvent;
 import com.momosoftworks.coldsweat.api.event.core.registry.TempModifierRegisterEvent;
 import com.momosoftworks.coldsweat.api.temperature.modifier.BiomeTempModifier;
+import com.momosoftworks.coldsweat.api.temperature.modifier.BlockTempModifier;
 import com.momosoftworks.coldsweat.api.util.Temperature;
 import com.momosoftworks.coldsweat.api.util.placement.Matcher;
 import com.momosoftworks.coldsweat.api.util.placement.Mode;
@@ -22,6 +23,8 @@ import net.neoforged.bus.api.SubscribeEvent;
 public final class ColdSweatCompat {
     public static final ResourceLocation OUTDOOR_CLIMATE_MODIFIER =
             ResourceLocation.fromNamespaceAndPath(ArcticNights.MOD_ID, "outdoor_climate");
+    public static final ResourceLocation BLOCK_TEMP_MODIFIER =
+            ResourceLocation.fromNamespaceAndPath(ArcticNights.MOD_ID, "nearby_blocks");
 
     private ColdSweatCompat() {
     }
@@ -29,24 +32,37 @@ public final class ColdSweatCompat {
     @SubscribeEvent
     public static void registerTempModifiers(TempModifierRegisterEvent event) {
         event.register(OUTDOOR_CLIMATE_MODIFIER, OutdoorClimateTempModifier::new);
+        event.register(BLOCK_TEMP_MODIFIER, ArcticBlockTempModifier::new);
     }
 
     @SubscribeEvent
     public static void addDefaultModifiers(DefaultTempModifiersEvent event) {
         event.removeModifiers(Temperature.Trait.WORLD, modifier ->
-                OUTDOOR_CLIMATE_MODIFIER.equals(modifier.getID()) || modifier instanceof OutdoorClimateTempModifier);
+                OUTDOOR_CLIMATE_MODIFIER.equals(modifier.getID()) || modifier instanceof OutdoorClimateTempModifier
+                        || BLOCK_TEMP_MODIFIER.equals(modifier.getID()) || modifier instanceof ArcticBlockTempModifier);
         if (!ArcticNightsFeatures.climateSystem()) return;
+        event.removeModifiers(Temperature.Trait.WORLD, modifier -> modifier instanceof BlockTempModifier);
 
-        Placement placement = Placement
+        Placement outdoorPlacement = Placement
                 .of(Mode.ADD_AFTER, Order.FIRST, modifier -> modifier instanceof BiomeTempModifier)
                 .orElse(Placement.FIRST)
+                .noDuplicates(Matcher.SAME_CLASS);
+        Placement blockPlacement = Placement
+                .of(Mode.ADD_AFTER, Order.LAST, modifier -> modifier instanceof OutdoorClimateTempModifier)
+                .orElse(Placement.LAST)
                 .noDuplicates(Matcher.SAME_CLASS);
 
         event.addModifierById(
                 Temperature.Trait.WORLD,
                 OUTDOOR_CLIMATE_MODIFIER,
                 modifier -> modifier.tickRate(20),
-                placement
+                outdoorPlacement
+        );
+        event.addModifierById(
+                Temperature.Trait.WORLD,
+                BLOCK_TEMP_MODIFIER,
+                modifier -> modifier.tickRate(20),
+                blockPlacement
         );
     }
 

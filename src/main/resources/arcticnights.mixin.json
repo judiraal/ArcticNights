@@ -22,6 +22,7 @@
     "minecraft.NoiseBasedChunkGeneratorMixin",
     "minecraft.ServerChunkCacheAccessor",
     "minecraft.ServerLevelMixin",
+    "cold_sweat.RegistryMultiMapMixin",
     "minecraft.SnowLayerBlockMixin",
     "sereneseasons.RandomUpdateHandlerMixin",
     "sereneseasons.SeasonHooksMixin",

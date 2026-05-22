@@ -47,7 +47,7 @@ public final class ColdSweatDebug {
                 + ": cached=" + temp(cachedWorld)
                 + ", fresh=" + temp(freshWorld)
                 + ", modifiers=" + modifiers.size());
-        lines.add("Cold Sweat thermometer readout WORLD: " + temp(measuredWorld)
+        lines.add("Cold Sweat HUD-measured WORLD: " + temp(measuredWorld)
                 + ", felt-only delta=" + tempDelta(freshWorld - measuredWorld));
         lines.add("Cold Sweat WORLD modifiers: " + modifierSummary(modifiers));
         appendModifierEffects(lines, modifiers);
@@ -146,7 +146,7 @@ public final class ColdSweatDebug {
 
     private static String feltOnlyLabel(TempModifier modifier) {
         return ThermometerReadoutTemperature.isFeltOnlyWorldModifier(modifier)
-                ? " [felt-only; hidden from thermometer number]"
+                ? " [felt-only; hidden from advanced world readout]"
                 : "";
     }
 }
