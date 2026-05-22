@@ -8,6 +8,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameRules;
@@ -30,6 +31,9 @@ import sereneseasons.season.SeasonHooks;
 
 public final class SnowMeltHandler {
     private static final float CLIMATE_MELT_CHANCE = 1.0F / 16.0F;
+    private static final double CLIMATE_MELT_PLAYER_DISTANCE = 128.0D;
+    private static final double CLIMATE_MELT_PLAYER_DISTANCE_SQR =
+            CLIMATE_MELT_PLAYER_DISTANCE * CLIMATE_MELT_PLAYER_DISTANCE;
 
     private SnowMeltHandler() {}
 
@@ -38,25 +42,44 @@ public final class SnowMeltHandler {
     }
 
     public static void meltClimateInLoadedChunks(ServerLevel level) {
+        meltClimateInLoadedChunks(level, getSubSeason(level));
+    }
+
+    public static void meltClimateInLoadedChunks(ServerLevel level, Season.SubSeason subSeason) {
         int rolls = level.getGameRules().getInt(GameRules.RULE_RANDOMTICKING);
         if (rolls <= 0) return;
 
         ChunkMap chunkMap = ((ServerChunkCacheAccessor) level.getChunkSource()).arcticnights$chunkMap();
-        Season.SubSeason subSeason = getSubSeason(level);
-
         ChunkMapAccessor chunkMapAccessor = (ChunkMapAccessor) chunkMap;
         for (ChunkHolder holder : chunkMapAccessor.arcticnights$getChunks()) {
             LevelChunk chunk = holder.getTickingChunk();
             if (chunk == null) continue;
 
             ChunkPos chunkPos = chunk.getPos();
-            if (!chunkMapAccessor.arcticnights$anyPlayerCloseEnoughForSpawning(chunkPos)
+            if (!isPlayerCloseEnoughForClimateMelt(level, chunkPos)
                     || !level.shouldTickBlocksAt(chunkPos.toLong())) continue;
 
             for (int roll = 0; roll < rolls; roll++) {
                 meltInChunk(chunk, CLIMATE_MELT_CHANCE, subSeason);
             }
         }
+    }
+
+    private static boolean isPlayerCloseEnoughForClimateMelt(ServerLevel level, ChunkPos chunkPos) {
+        double chunkX = chunkPos.getMiddleBlockX();
+        double chunkZ = chunkPos.getMiddleBlockZ();
+
+        for (ServerPlayer player : level.players()) {
+            if (player.isSpectator()) continue;
+
+            double dx = player.getX() - chunkX;
+            double dz = player.getZ() - chunkZ;
+            if (dx * dx + dz * dz <= CLIMATE_MELT_PLAYER_DISTANCE_SQR) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void meltInChunk(LevelChunk chunkIn, float meltChance, Season.SubSeason subSeason) {
