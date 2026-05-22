@@ -26,6 +26,10 @@ public final class ClimateService {
     private static final double COLD_SWEAT_CELSIUS_PER_MC = 25.0D;
     private static final double ABSOLUTE_WEATHER_VARIANCE_C = 5.0D;
     private static final double RELATIVE_WEATHER_VARIANCE = 0.10D;
+    private static final int WEATHER_SPELL_DAYS = 4;
+    private static final double DAILY_WEATHER_JITTER_C = 1.0D;
+    private static final int STARTING_WEATHER_GRACE_DAYS = 5;
+    private static final double STARTING_WEATHER_OFFSET_C = 5.0D;
     private static final int WEATHER_ANOMALY_TRANSITION_TICKS = 2_000;
     private static final float EQUATOR_WINTER_C = 24.0F;
     private static final float EQUATOR_SPRING_AUTUMN_C = 30.0F;
@@ -302,7 +306,7 @@ public final class ClimateService {
             case THUNDER -> 1.0F;
         };
         float amplitude = maxAmplitude * seasonalScale * weatherScale;
-        float anomaly = interpolatedDailyAnomaly(level.getDayTime(), pos) * amplitude;
+        float anomaly = interpolatedWeatherAnomaly(level.getDayTime(), pos, amplitude);
 
         if (weatherState != ClimateSnapshot.WeatherState.CLEAR) {
             if (anomaly < 0.0F) {
@@ -312,7 +316,8 @@ public final class ClimateService {
             }
         }
 
-        return Mth.clamp(anomaly, -maxAmplitude, maxAmplitude);
+        anomaly = Mth.clamp(anomaly, -maxAmplitude, maxAmplitude);
+        return Mth.clamp(startingWeatherBlend(level.getGameTime(), anomaly), -maxAmplitude, maxAmplitude);
     }
 
     private static float maxWeatherVariance(float baseTemperature) {
@@ -320,26 +325,51 @@ public final class ClimateService {
         return (float) ((ABSOLUTE_WEATHER_VARIANCE_C + Math.abs(baseCelsius) * RELATIVE_WEATHER_VARIANCE) / COLD_SWEAT_CELSIUS_PER_MC);
     }
 
-    private static float interpolatedDailyAnomaly(long dayTime, BlockPos pos) {
+    private static float interpolatedWeatherAnomaly(long dayTime, BlockPos pos, float amplitude) {
         long shiftedTime = dayTime - NOON;
         long cycle = Math.floorDiv(shiftedTime, 24_000L);
         long ticksSinceNoon = Math.floorMod(shiftedTime, 24_000L);
         long transitionStart = 24_000L - WEATHER_ANOMALY_TRANSITION_TICKS;
         if (ticksSinceNoon < transitionStart) {
-            return dailyAnomaly(cycle, pos);
+            return dailyWeatherAnomaly(cycle, pos, amplitude);
         }
 
         float progress = (ticksSinceNoon - transitionStart) / (float) WEATHER_ANOMALY_TRANSITION_TICKS;
         float blend = progress * progress * (3.0F - 2.0F * progress);
-        return Mth.lerp(blend, dailyAnomaly(cycle, pos), dailyAnomaly(cycle + 1L, pos));
+        return Mth.lerp(blend, dailyWeatherAnomaly(cycle, pos, amplitude), dailyWeatherAnomaly(cycle + 1L, pos, amplitude));
     }
 
-    private static float dailyAnomaly(long cycle, BlockPos pos) {
+    private static float dailyWeatherAnomaly(long cycle, BlockPos pos, float amplitude) {
+        return weatherSpellCurve(cycle, pos) * amplitude + dailyWeatherJitter(cycle, pos);
+    }
+
+    private static float weatherSpellCurve(long cycle, BlockPos pos) {
+        long spell = Math.floorDiv(cycle, WEATHER_SPELL_DAYS);
+        int dayInSpell = Math.floorMod(cycle, WEATHER_SPELL_DAYS);
+        float progress = dayInSpell / (float) WEATHER_SPELL_DAYS;
+        float blend = progress * progress * (3.0F - 2.0F * progress);
+        return Mth.lerp(blend, regionalWeatherNoise(spell, pos, 0L), regionalWeatherNoise(spell + 1L, pos, 0L));
+    }
+
+    private static float dailyWeatherJitter(long cycle, BlockPos pos) {
+        return celsiusOffsetToMinecraftTemperatureOffset(regionalWeatherNoise(cycle, pos, 2L) * DAILY_WEATHER_JITTER_C);
+    }
+
+    private static float startingWeatherBlend(long gameTime, float anomaly) {
+        long worldDay = Math.max(0L, Math.floorDiv(gameTime, 24_000L));
+        if (worldDay >= STARTING_WEATHER_GRACE_DAYS) return anomaly;
+
+        float blend = worldDay / (float) STARTING_WEATHER_GRACE_DAYS;
+        return Mth.lerp(blend, celsiusOffsetToMinecraftTemperatureOffset(STARTING_WEATHER_OFFSET_C), anomaly);
+    }
+
+    private static float regionalWeatherNoise(long cycle, BlockPos pos, long salt) {
         int regionX = Math.floorDiv(pos.getX(), CLIMATE_REGION_SIZE);
         int regionZ = Math.floorDiv(pos.getZ(), CLIMATE_REGION_SIZE);
         long hash = mix64(cycle * 0x9E3779B97F4A7C15L
                 ^ (long) regionX * 0xBF58476D1CE4E5B9L
-                ^ (long) regionZ * 0x94D049BB133111EBL);
+                ^ (long) regionZ * 0x94D049BB133111EBL
+                ^ salt * 0xD6E8FEB86659FD93L);
         double unit = (hash >>> 11) * 0x1.0p-53;
         return (float) (unit * 2.0D - 1.0D);
     }
