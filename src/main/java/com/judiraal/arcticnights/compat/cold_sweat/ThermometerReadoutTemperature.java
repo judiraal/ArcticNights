@@ -18,7 +18,14 @@ public final class ThermometerReadoutTemperature {
 
     private static int cachedEntityId = Integer.MIN_VALUE;
     private static int cachedTick = Integer.MIN_VALUE;
+    private static int cachedLevelHash = Integer.MIN_VALUE;
+    private static boolean cachedClientSide;
     private static double cachedFeltOnlyDelta;
+    private static int lastHudCorrectionEntityId = Integer.MIN_VALUE;
+    private static int lastHudCorrectionTick = Integer.MIN_VALUE;
+    private static double lastHudCorrectionOriginal;
+    private static double lastHudCorrectionDelta;
+    private static double lastHudCorrectionCorrected;
 
     private ThermometerReadoutTemperature() {
     }
@@ -28,7 +35,10 @@ public final class ThermometerReadoutTemperature {
 
         int entityId = entity.getId();
         int tick = entity.tickCount;
-        if (cachedEntityId == entityId && cachedTick == tick) {
+        int levelHash = System.identityHashCode(entity.level());
+        boolean clientSide = entity.level().isClientSide();
+        if (cachedEntityId == entityId && cachedTick == tick
+                && cachedLevelHash == levelHash && cachedClientSide == clientSide) {
             return cachedFeltOnlyDelta;
         }
 
@@ -61,8 +71,30 @@ public final class ThermometerReadoutTemperature {
 
         cachedEntityId = entityId;
         cachedTick = tick;
+        cachedLevelHash = levelHash;
+        cachedClientSide = clientSide;
         cachedFeltOnlyDelta = delta;
         return delta;
+    }
+
+    public static void recordHudReadoutCorrection(LivingEntity entity, double original, double delta, double corrected) {
+        lastHudCorrectionEntityId = entity.getId();
+        lastHudCorrectionTick = entity.tickCount;
+        lastHudCorrectionOriginal = original;
+        lastHudCorrectionDelta = delta;
+        lastHudCorrectionCorrected = corrected;
+    }
+
+    public static ReadoutCorrection lastHudReadoutCorrectionOrNull(LivingEntity entity) {
+        if (lastHudCorrectionEntityId != entity.getId() || lastHudCorrectionTick != entity.tickCount) {
+            return null;
+        }
+        return new ReadoutCorrection(
+                lastHudCorrectionTick,
+                lastHudCorrectionOriginal,
+                lastHudCorrectionDelta,
+                lastHudCorrectionCorrected
+        );
     }
 
     public static double applyCachedWorldModifiers(List<TempModifier> modifiers, boolean measuredOnly) {
@@ -82,5 +114,8 @@ public final class ThermometerReadoutTemperature {
         return modifier instanceof WaterTempModifier
                 || COLD_SWEAT_WATER.equals(id)
                 || WEATHER2_STORM.equals(id);
+    }
+
+    public record ReadoutCorrection(int tick, double original, double delta, double corrected) {
     }
 }
