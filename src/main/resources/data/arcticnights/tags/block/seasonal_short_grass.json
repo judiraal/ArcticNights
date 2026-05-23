@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:short_grass",
+    "minecraft:fern",
+    {
+      "id": "projectvibrantjourneys:short_grass",
+      "required": false
+    }
+  ]
+}

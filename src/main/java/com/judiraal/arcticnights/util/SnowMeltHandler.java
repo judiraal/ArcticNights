@@ -173,7 +173,7 @@ public final class SnowMeltHandler {
     }
 
     private static boolean isSnow(BlockState blockState) {
-        return blockState.is(Blocks.SNOW) || blockState.is(Blocks.SNOW_BLOCK);
+        return blockState.is(Blocks.SNOW);
     }
 
     private static boolean findFirstTopSnow(Level level, BlockPos.MutableBlockPos pos, int yTop) {
@@ -195,9 +195,6 @@ public final class SnowMeltHandler {
             } else {
                 level.setBlockAndUpdate(pos, state.setValue(SnowLayerBlock.LAYERS, layers - 1));
             }
-        } else if (state.is(Blocks.SNOW_BLOCK)) {
-            BlockState newState = Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, 7);
-            level.setBlockAndUpdate(pos, newState);
         } else if (state.is(Blocks.ICE)) {
             ((IceBlock) Blocks.ICE).melt(state, level, pos);
         }

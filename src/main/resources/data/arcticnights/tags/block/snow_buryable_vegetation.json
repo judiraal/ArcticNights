@@ -1,0 +1,33 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:short_grass",
+    "minecraft:tall_grass",
+    "minecraft:fern",
+    "minecraft:large_fern",
+    {
+      "id": "projectvibrantjourneys:short_grass",
+      "required": false
+    },
+    {
+      "id": "projectvibrantjourneys:beach_grass",
+      "required": false
+    },
+    {
+      "id": "projectvibrantjourneys:sandy_sprouts",
+      "required": false
+    },
+    {
+      "id": "projectvibrantjourneys:twigs",
+      "required": false
+    },
+    {
+      "id": "projectvibrantjourneys:birch_twigs",
+      "required": false
+    },
+    {
+      "id": "#projectvibrantjourneys:fallen_leaves",
+      "required": false
+    }
+  ]
+}

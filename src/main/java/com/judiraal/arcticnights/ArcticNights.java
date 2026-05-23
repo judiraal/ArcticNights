@@ -30,6 +30,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.common.data.internal.NeoForgeBiomeTagsProvider;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.SpawnClusterSizeEvent;
@@ -83,10 +84,6 @@ public class ArcticNights {
         if (event.getEntity().level() instanceof ServerLevel level && appliesTo(level)) {
             var factor = ArcticSpawner.spawnFactor(event.getEntity().getType(), event.getEntity().blockPosition(), level);
             if (factor > 0.0F && factor < 1.0F) event.setSize(Math.max(1, (int)(event.getSize() * factor)));
-            else if (factor > 1.0F) {
-                var correction = Mth.frac(factor) / (int)factor;
-                event.setSize((int)(event.getSize() * correction));
-            }
         }
     }
 
@@ -116,6 +113,27 @@ public class ArcticNights {
         logCreeperSpawn("finalize", event.getSpawnType(), pos, ArcticSpawner.creeperSpawnProbe(pos, level));
     }
 
+    @SubscribeEvent
+    public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
+        if (event.getEntity().getType() != EntityType.CREEPER) return;
+        if (!(event.getLevel() instanceof ServerLevel level) || !appliesTo(level)) return;
+
+        BlockPos pos = event.getEntity().blockPosition();
+        ArcticSpawner.CreeperSpawnProbe probe = ArcticSpawner.creeperSpawnProbe(pos, level);
+        boolean denied = ArcticNightsFeatures.arcticSpawning() && probe.factor() == 0.0F;
+        if (denied) {
+            event.setCanceled(true);
+            event.getEntity().discard();
+        }
+
+        if (!ArcticNightsFeatures.debugCommands()) return;
+        String action = denied ? "join-deny" : "join";
+        logCreeperJoin(action, event, pos, probe, denied);
+        if (denied) {
+            logCreeperJoinStack(action, event, pos);
+        }
+    }
+
     private static void logCreeperSpawn(String action, MobSpawnType spawnType, BlockPos pos, ArcticSpawner.CreeperSpawnProbe probe) {
         if (!ArcticNightsFeatures.debugCommands()) return;
         LOGGER.info("ANSPAWN creeper {} spawnType={} gate={} pos={} {} {} biome={} tempC={} mcTemp={} factor={} cave={} lava={}",
@@ -131,6 +149,68 @@ public class ArcticNights {
                 f(probe.factor()),
                 f(probe.caveFactor()),
                 probe.nearUndergroundLavaLake());
+    }
+
+    private static void logCreeperJoin(String action, EntityJoinLevelEvent event, BlockPos pos, ArcticSpawner.CreeperSpawnProbe probe, boolean denied) {
+        LOGGER.info("ANSPAWN creeper {} loadedFromDisk={} canceled={} gate={} uuid={} pos={} {} {} biome={} tempC={} mcTemp={} factor={} cave={} lava={} tags={} source={}",
+                action,
+                event.loadedFromDisk(),
+                denied,
+                ArcticNightsFeatures.arcticSpawning() ? "active" : "disabled",
+                event.getEntity().getUUID(),
+                pos.getX(),
+                pos.getY(),
+                pos.getZ(),
+                probe.biomeId(),
+                c(probe.estimatedCelsius()),
+                f(probe.minecraftTemperature()),
+                f(probe.factor()),
+                f(probe.caveFactor()),
+                probe.nearUndergroundLavaLake(),
+                event.getEntity().getTags(),
+                stackSourceHint());
+    }
+
+    private static void logCreeperJoinStack(String action, EntityJoinLevelEvent event, BlockPos pos) {
+        LOGGER.info("ANSPAWN creeper stack action={} loadedFromDisk={} uuid={} pos={} {} {}",
+                action,
+                event.loadedFromDisk(),
+                event.getEntity().getUUID(),
+                pos.getX(),
+                pos.getY(),
+                pos.getZ(),
+                new Throwable("Creeper EntityJoinLevelEvent source stack"));
+    }
+
+    private static String stackSourceHint() {
+        StringBuilder hint = new StringBuilder();
+        int count = 0;
+        for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
+            String className = frame.getClassName();
+            if (isNoiseStackFrame(className)) continue;
+            if (count++ > 0) hint.append(" <- ");
+            hint.append(simpleClassName(className)).append('.').append(frame.getMethodName()).append(':').append(frame.getLineNumber());
+            if (count >= 8) break;
+        }
+        return hint.isEmpty() ? "unknown" : hint.toString();
+    }
+
+    private static boolean isNoiseStackFrame(String className) {
+        return className.equals(Thread.class.getName())
+                || className.equals(ArcticNights.class.getName())
+                || className.startsWith("java.")
+                || className.startsWith("jdk.")
+                || className.startsWith("sun.")
+                || className.startsWith("org.slf4j.")
+                || className.startsWith("com.mojang.logging.")
+                || className.startsWith("net.neoforged.bus.")
+                || className.startsWith("net.neoforged.fml.")
+                || className.startsWith("cpw.mods.");
+    }
+
+    private static String simpleClassName(String className) {
+        int index = className.lastIndexOf('.');
+        return index < 0 ? className : className.substring(index + 1);
     }
 
     private static String c(double value) {
@@ -173,5 +253,13 @@ public class ArcticNights {
     public static final class Blocks {
         public static final TagKey<Block> TORNADO_PROTECTED =
                 TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(MOD_ID, "tornado_protected"));
+        public static final TagKey<Block> SNOW_BURYABLE_VEGETATION =
+                TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(MOD_ID, "snow_buryable_vegetation"));
+        public static final TagKey<Block> SEASONAL_REGROWTH_SUBSTRATE =
+                TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(MOD_ID, "seasonal_regrowth_substrate"));
+        public static final TagKey<Block> SEASONAL_SHORT_GRASS =
+                TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(MOD_ID, "seasonal_short_grass"));
+        public static final TagKey<Block> SEASONAL_FOREST_LITTER =
+                TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(MOD_ID, "seasonal_forest_litter"));
     }
 }

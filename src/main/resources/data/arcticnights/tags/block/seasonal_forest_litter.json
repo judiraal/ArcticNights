@@ -1,0 +1,17 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "projectvibrantjourneys:twigs",
+      "required": false
+    },
+    {
+      "id": "projectvibrantjourneys:birch_twigs",
+      "required": false
+    },
+    {
+      "id": "#projectvibrantjourneys:fallen_leaves",
+      "required": false
+    }
+  ]
+}

@@ -483,7 +483,9 @@ public final class ClimateService {
         }
 
         BlockState blockState = levelReader.getBlockState(pos);
-        return (blockState.isAir() || blockState.is(Blocks.SNOW))
+        return (blockState.isAir()
+                || (blockState.is(Blocks.SNOW) && SnowAccumulation.canAccumulate(levelReader, pos, blockState))
+                || SeasonalGroundCover.canBeBuriedBySnow(blockState))
                 && Blocks.SNOW.defaultBlockState().canSurvive(levelReader, pos);
     }
 
