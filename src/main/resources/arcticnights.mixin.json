@@ -2,7 +2,6 @@
   "required": true,
   "package": "com.judiraal.arcticnights.mixin",
   "compatibilityLevel": "JAVA_21",
-  "refmap": "arcticnights.mixin-refmap.json",
   "plugin": "com.judiraal.arcticnights.ConditionalMixin",
   "mixins": [
     "iris.CelestialUniformsMixin",
@@ -22,6 +21,7 @@
     "minecraft.NoiseBasedChunkGeneratorMixin",
     "minecraft.ServerChunkCacheAccessor",
     "minecraft.ServerLevelMixin",
+    "minecraft.VanillaServerLevelPrecipitationMixin",
     "minecraft.SpreadingSnowyDirtBlockMixin",
     "cold_sweat.RegistryMultiMapMixin",
     "minecraft.SnowLayerBlockMixin",

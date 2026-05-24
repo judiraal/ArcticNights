@@ -12,6 +12,9 @@ import java.util.regex.Pattern;
 
 public class ConditionalMixin implements IMixinConfigPlugin {
     private static final Pattern MIXIN_PATTERN = Pattern.compile("mixin\\.([^.]+)");
+    private static final String SERENE_SEASONS_MOD_ID = "sereneseasons";
+    private static final String VANILLA_SERVER_LEVEL_PRECIPITATION_MIXIN =
+            "com.judiraal.arcticnights.mixin.minecraft.VanillaServerLevelPrecipitationMixin";
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -24,6 +27,10 @@ public class ConditionalMixin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        if (VANILLA_SERVER_LEVEL_PRECIPITATION_MIXIN.equals(mixinClassName)
+                && FMLLoader.getLoadingModList().getModFileById(SERENE_SEASONS_MOD_ID) != null) {
+            return false;
+        }
         Matcher matcher = MIXIN_PATTERN.matcher(mixinClassName);
         if (matcher.find()) return FMLLoader.getLoadingModList().getModFileById(matcher.group(1)) != null;
         return false;

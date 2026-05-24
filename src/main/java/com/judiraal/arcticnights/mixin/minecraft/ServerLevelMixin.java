@@ -38,11 +38,4 @@ public class ServerLevelMixin {
         return ClimateService.shouldSnow(level, level.getBiome(pos), pos);
     }
 
-    @Redirect(method = "tickPrecipitation",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
-    private Biome.Precipitation arcticnights$precipitationAt(Biome biome, BlockPos pos) {
-        if (!ArcticNightsFeatures.climateSystem()) return biome.getPrecipitationAt(pos);
-        ServerLevel level = (ServerLevel) (Object) this;
-        return ClimateService.precipitationAtAsVanillaType(level, level.getBiome(pos), pos);
-    }
 }
