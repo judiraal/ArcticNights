@@ -2,6 +2,7 @@ package com.judiraal.arcticnights;
 
 import com.judiraal.arcticnights.compat.ConditionalSubscribers;
 import com.judiraal.arcticnights.util.ArcticSpawner;
+import com.judiraal.arcticnights.util.ClimateService;
 import com.judiraal.arcticnights.util.UndeadSpawnDiagnostics;
 import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
 import com.mojang.logging.LogUtils;
@@ -36,6 +37,7 @@ import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.SpawnClusterSizeEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import org.slf4j.Logger;
 
 import java.util.Locale;
@@ -61,6 +63,11 @@ public class ArcticNights {
         ConditionalSubscribers.inject(modContainer);
         modContainer.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
         ArcticNightsDensityFunctionTypes.TYPES.register(modEventBus);
+    }
+
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        ClimateService.clearDebugWeatherOffset(event.getServer());
     }
 
     @SubscribeEvent

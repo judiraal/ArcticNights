@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.tags.TagKey;
@@ -23,7 +24,7 @@ import javax.annotation.Nullable;
 public final class ClimateService {
     private static final int NOON = 6_000;
     private static final int CLIMATE_REGION_SIZE = 2_048;
-    private static final double COLD_SWEAT_CELSIUS_PER_MC = 25.0D;
+    static final double COLD_SWEAT_CELSIUS_PER_MC = 25.0D;
     private static final double ABSOLUTE_WEATHER_VARIANCE_C = 5.0D;
     private static final double RELATIVE_WEATHER_VARIANCE = 0.10D;
     private static final int WEATHER_SPELL_DAYS = 4;
@@ -44,7 +45,6 @@ public final class ClimateService {
     private static final float TEMPERATE_PLATEAU_MAX = 0.65F;
     private static final float SNOW_THRESHOLD = 3.0F / 25.0F;
     private static final float PERSISTENT_SNOW_THRESHOLD = -3.0F / 25.0F;
-    private static float debugWeatherOffset = Float.NaN;
     private static final TagKey<Biome> COLD = tag("c", "is_cold");
     private static final TagKey<Biome> COLD_OVERWORLD = tag("c", "is_cold/overworld");
     private static final TagKey<Biome> HOT = tag("c", "is_hot");
@@ -296,6 +296,7 @@ public final class ClimateService {
     }
 
     private static float climateAnomaly(Level level, BlockPos pos, float seasonFactor, ClimateSnapshot.WeatherState weatherState, float baseTemperature) {
+        float debugWeatherOffset = ClimateDebugWeatherOverrides.minecraftOffset(level);
         if (!Float.isNaN(debugWeatherOffset)) return debugWeatherOffset;
 
         float winterInfluence = Mth.clamp(-seasonFactor, 0.0F, 1.0F);
@@ -548,20 +549,20 @@ public final class ClimateService {
         return (float) (celsiusOffset / COLD_SWEAT_CELSIUS_PER_MC);
     }
 
-    public static void setDebugWeatherOffsetCelsius(double celsiusOffset) {
-        debugWeatherOffset = celsiusOffsetToMinecraftTemperatureOffset(celsiusOffset);
+    public static void setDebugWeatherOffsetCelsius(MinecraftServer server, double celsiusOffset) {
+        ClimateDebugWeatherOverrides.setCelsius(server, celsiusOffset);
     }
 
-    public static void clearDebugWeatherOffset() {
-        debugWeatherOffset = Float.NaN;
+    public static void clearDebugWeatherOffset(MinecraftServer server) {
+        ClimateDebugWeatherOverrides.clear(server);
     }
 
-    public static boolean hasDebugWeatherOffset() {
-        return !Float.isNaN(debugWeatherOffset);
+    public static boolean hasDebugWeatherOffset(MinecraftServer server) {
+        return ClimateDebugWeatherOverrides.has(server);
     }
 
-    public static double debugWeatherOffsetCelsius() {
-        return hasDebugWeatherOffset() ? debugWeatherOffset * COLD_SWEAT_CELSIUS_PER_MC : 0.0D;
+    public static double debugWeatherOffsetCelsius(MinecraftServer server) {
+        return ClimateDebugWeatherOverrides.celsiusOffset(server);
     }
 
     public record ClimateBreakdown(
