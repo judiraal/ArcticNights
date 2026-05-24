@@ -48,8 +48,9 @@ public final class ColdSweatReadoutNetworking {
         });
     }
 
-    public static final class ModEvents {
-        private ModEvents() {
+    @ConditionalEventBusSubscriber(dependencies = {"cold_sweat"}, bus = ConditionalEventBusSubscriber.Bus.MOD)
+    public static final class PayloadRegistration {
+        private PayloadRegistration() {
         }
 
         @SubscribeEvent

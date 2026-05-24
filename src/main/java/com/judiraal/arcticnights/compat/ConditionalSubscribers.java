@@ -54,18 +54,17 @@ public final class ConditionalSubscribers {
     private static void inject(ModContainer modContainer, ModFileScanData.AnnotationData annotationData, Module layer) {
         try {
             Class<?> clazz = Class.forName(annotationData.clazz().getClassName(), true, layer.getClassLoader());
-            registerNeoForge(clazz);
-            IEventBus modBus = modContainer.getEventBus();
-            for (Class<?> subClass : clazz.getDeclaredClasses()) {
-                if ("ClientEvents".equals(subClass.getSimpleName()) && FMLEnvironment.dist == Dist.CLIENT) {
-                    registerNeoForge(subClass);
+            ConditionalEventBusSubscriber subscriber = clazz.getAnnotation(ConditionalEventBusSubscriber.class);
+            if (subscriber == null) return;
+            if (subscriber.bus() == ConditionalEventBusSubscriber.Bus.MOD) {
+                IEventBus modBus = modContainer.getEventBus();
+                if (modBus == null) {
+                    ArcticNights.LOGGER.warn("Skipping conditional mod-bus subscription of {}; mod bus is unavailable", annotationData.targetType().name());
+                    return;
                 }
-                if (modBus != null && "ModEvents".equals(subClass.getSimpleName())) {
-                    registerModBus(modBus, subClass);
-                }
-                if (modBus != null && "ClientModEvents".equals(subClass.getSimpleName()) && FMLEnvironment.dist == Dist.CLIENT) {
-                    registerModBus(modBus, subClass);
-                }
+                registerModBus(modBus, clazz);
+            } else {
+                registerNeoForge(clazz);
             }
         } catch (Throwable t) {
             ArcticNights.LOGGER.warn("Exception during conditional event bus subscription of {}", annotationData.targetType().name(), t);

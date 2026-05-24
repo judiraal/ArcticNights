@@ -13,4 +13,11 @@ public @interface ConditionalEventBusSubscriber {
     Dist[] value() default { Dist.CLIENT, Dist.DEDICATED_SERVER };
 
     String[] dependencies() default {};
+
+    Bus bus() default Bus.GAME;
+
+    enum Bus {
+        GAME,
+        MOD
+    }
 }
