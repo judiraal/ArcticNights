@@ -3,7 +3,6 @@ var InsnList=Java.type('org.objectweb.asm.tree.InsnList')
 var VarInsnNode=Java.type('org.objectweb.asm.tree.VarInsnNode')
 var MethodInsnNode=Java.type('org.objectweb.asm.tree.MethodInsnNode')
 var ASM = Java.type('net.neoforged.coremod.api.ASMAPI');
-var IllegalStateException = Java.type('java.lang.IllegalStateException');
 
 function initializeCoreMod() {
     return {
@@ -35,7 +34,7 @@ function initializeCoreMod() {
                     }
                 }
                 if (!patched) {
-                    throw new IllegalStateException("Arctic Nights failed to patch LevelReader#getMaxLocalRawBrightness(BlockPos)");
+                    throw new Error("Arctic Nights failed to patch LevelReader#getMaxLocalRawBrightness(BlockPos)");
                 }
 
 				return classNode;
