@@ -15,6 +15,8 @@ public final class SpawnEcology {
     private static final float RAIN_STRAY_UNDEAD_START = 3.0F / 25.0F;
     private static final float RAIN_STRAY_UNDEAD_FULL = -3.0F / 25.0F;
     private static final float UNDEAD_COLD_RAMP = 0.48F;
+    private static final float UNDEAD_BARE_GROUND_DIVISOR = 5.0F;
+    private static final float UNDEAD_ACTIVE_SNOW_MULTIPLIER = 2.0F;
     private static final float MIN_MEANINGFUL_SPAWN_FACTOR = 0.08F;
     private static final float MIN_MEANINGFUL_SPIDER_FACTOR = 0.20F;
     private static final float CREEPER_HEAT_START = 30.0F / 25.0F;
@@ -49,6 +51,17 @@ public final class SpawnEcology {
         float factor = Mth.lerp(caveFactor / 2.0F, coldSeverity * coldSeverity * 2.2F, 1.0F);
         if (factor < MIN_MEANINGFUL_SPAWN_FACTOR) factor = 0.0F;
         return Math.max(factor, rainStrayFactor);
+    }
+
+    public static float undeadSurfaceWeatherFactor(float factor, boolean snowOrIceSurface, boolean activelySnowing) {
+        if (factor <= 0.0F) return 0.0F;
+        float adjusted = snowOrIceSurface ? factor : factor / UNDEAD_BARE_GROUND_DIVISOR;
+        return activelySnowing ? adjusted * UNDEAD_ACTIVE_SNOW_MULTIPLIER : adjusted;
+    }
+
+    public static boolean activelySnowing(ClimateSnapshot snapshot) {
+        return snapshot.weatherState() != ClimateSnapshot.WeatherState.CLEAR
+                && snapshot.precipitationKind() == ClimateSnapshot.PrecipitationKind.SNOW;
     }
 
     public static float creeperFactor(Holder<Biome> biome, ClimateSnapshot snapshot, float caveFactor) {

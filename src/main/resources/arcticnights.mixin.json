@@ -25,6 +25,7 @@
     "minecraft.SpreadingSnowyDirtBlockMixin",
     "cold_sweat.RegistryMultiMapMixin",
     "minecraft.SnowLayerBlockMixin",
+    "minecraft.UndeadIceSpawnSurfaceMixin",
     "sereneseasons.RandomUpdateHandlerMixin",
     "sereneseasons.SeasonHooksMixin",
     "weather2.TornadoHelperMixin",

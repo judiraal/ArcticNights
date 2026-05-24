@@ -26,7 +26,7 @@ public final class ColdSweatClientDebug {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onClientTick(ClientTickEvent.Pre event) {
-        if (!ArcticNightsFeatures.debugCommands()) return;
+        if (!ArcticNightsFeatures.coldSweatClientDiagnostics() || !ArcticNights.LOGGER.isDebugEnabled()) return;
 
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
@@ -53,7 +53,7 @@ public final class ColdSweatClientDebug {
                 .map(ColdSweatClientDebug::modifierName)
                 .toList();
 
-        ArcticNights.LOGGER.info(
+        ArcticNights.LOGGER.debug(
                 "Cold Sweat client HUD readout: tick={} advanced={} units={} cap={} displayTarget={} overlay={} overlayMinusTarget={} clientFeltOnlyDelta={} serverReadout={} hook={} clientWorldModifiers={}",
                 player.tickCount,
                 advancedReadout,

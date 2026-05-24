@@ -91,6 +91,7 @@ public final class ClimateService {
     }
 
     private static ClimateSnapshot snapshot(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
+        weatherState = effectiveWeatherState(biome, exposedToSky, weatherState);
         float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactorOverride);
         float dayNightOffset = dayNightOffset(biome, dayTime);
         float weatherCompression = weatherCompression(weatherState, exposedToSky);
@@ -111,6 +112,7 @@ public final class ClimateService {
     }
 
     private static ClimateBreakdown breakdown(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
+        weatherState = effectiveWeatherState(biome, exposedToSky, weatherState);
         float poleFactor = poleFactor(pos);
         float latitudeMean = latitudeMean(poleFactor);
         float seasonFactor = seasonFactor(level, seasonFactorOverride);
@@ -364,14 +366,40 @@ public final class ClimateService {
     }
 
     private static float regionalWeatherNoise(long cycle, BlockPos pos, long salt) {
-        int regionX = Math.floorDiv(pos.getX(), CLIMATE_REGION_SIZE);
-        int regionZ = Math.floorDiv(pos.getZ(), CLIMATE_REGION_SIZE);
+        double regionX = pos.getX() / (double) CLIMATE_REGION_SIZE;
+        double regionZ = pos.getZ() / (double) CLIMATE_REGION_SIZE;
+        double broad = smoothWeatherNoise(cycle, regionX, regionZ, salt);
+        double edgeJitter = smoothWeatherNoise(cycle, regionX * 4.0D + 19.37D, regionZ * 4.0D - 7.11D, salt + 1L);
+        return (float) Mth.clamp(broad * 0.75D + edgeJitter * 0.25D, -1.0D, 1.0D);
+    }
+
+    private static double smoothWeatherNoise(long cycle, double x, double z, long salt) {
+        int x0 = (int) Math.floor(x);
+        int z0 = (int) Math.floor(z);
+        int x1 = x0 + 1;
+        int z1 = z0 + 1;
+        double xBlend = fade(x - x0);
+        double zBlend = fade(z - z0);
+        double north = lerp(xBlend, latticeWeatherNoise(cycle, x0, z0, salt), latticeWeatherNoise(cycle, x1, z0, salt));
+        double south = lerp(xBlend, latticeWeatherNoise(cycle, x0, z1, salt), latticeWeatherNoise(cycle, x1, z1, salt));
+        return lerp(zBlend, north, south);
+    }
+
+    private static double latticeWeatherNoise(long cycle, int regionX, int regionZ, long salt) {
         long hash = mix64(cycle * 0x9E3779B97F4A7C15L
                 ^ (long) regionX * 0xBF58476D1CE4E5B9L
                 ^ (long) regionZ * 0x94D049BB133111EBL
                 ^ salt * 0xD6E8FEB86659FD93L);
         double unit = (hash >>> 11) * 0x1.0p-53;
-        return (float) (unit * 2.0D - 1.0D);
+        return unit * 2.0D - 1.0D;
+    }
+
+    private static double fade(double value) {
+        return value * value * value * (value * (value * 6.0D - 15.0D) + 10.0D);
+    }
+
+    private static double lerp(double blend, double from, double to) {
+        return from + blend * (to - from);
     }
 
     private static long mix64(long value) {
@@ -393,8 +421,16 @@ public final class ClimateService {
     }
 
     private static ClimateSnapshot.WeatherState weatherState(Level level, Holder<Biome> biome, boolean exposedToSky) {
-        if (!exposedToSky || !biome.value().hasPrecipitation() || !level.isRaining()) return ClimateSnapshot.WeatherState.CLEAR;
-        return level.isThundering() ? ClimateSnapshot.WeatherState.THUNDER : ClimateSnapshot.WeatherState.RAIN;
+        if (!level.isRaining()) return ClimateSnapshot.WeatherState.CLEAR;
+        return effectiveWeatherState(biome, exposedToSky, level.isThundering()
+                ? ClimateSnapshot.WeatherState.THUNDER
+                : ClimateSnapshot.WeatherState.RAIN);
+    }
+
+    private static ClimateSnapshot.WeatherState effectiveWeatherState(Holder<Biome> biome, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState) {
+        if (weatherState == ClimateSnapshot.WeatherState.CLEAR) return ClimateSnapshot.WeatherState.CLEAR;
+        if (!exposedToSky || !biome.value().hasPrecipitation()) return ClimateSnapshot.WeatherState.CLEAR;
+        return weatherState;
     }
 
     public static boolean isExposedToSky(Level level, BlockPos pos) {

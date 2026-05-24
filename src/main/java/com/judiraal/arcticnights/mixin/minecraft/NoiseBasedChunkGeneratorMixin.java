@@ -35,7 +35,7 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 
             DensityFunction t = base.temperature();
             if (!(t instanceof ArcticTemperatureBands)) {
-                ArcticNights.LOGGER.info("ANLOG: Switching NoiseRouter");
+                ArcticNights.LOGGER.debug("Switching NoiseRouter for Arctic Nights temperature bands");
                 t = new ArcticTemperatureBands(t);
             }
 

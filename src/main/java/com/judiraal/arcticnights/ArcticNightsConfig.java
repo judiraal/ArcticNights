@@ -28,6 +28,8 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.BooleanValue arcticSpawning;
     public static ModConfigSpec.BooleanValue climateSystem;
     public static ModConfigSpec.BooleanValue debugCommands;
+    public static ModConfigSpec.BooleanValue spawnDiagnostics;
+    public static ModConfigSpec.BooleanValue coldSweatClientDiagnostics;
     public static ModConfigSpec.BooleanValue fullMelting;
     public static ModConfigSpec.BooleanValue alternativeTornadoStrengthGrabbing;
 
@@ -68,6 +70,12 @@ public class ArcticNightsConfig {
         debugCommands = builder.comment("Enable /arcticnights debug and audit commands.",
                         "Commands are disabled by default because they only serve diagnostics.")
                 .define("debugCommands", false);
+        spawnDiagnostics = builder.comment("Enable detailed spawn diagnostics logging.",
+                        "This can be noisy on servers and should only be enabled while investigating spawn behavior.")
+                .define("spawnDiagnostics", false);
+        coldSweatClientDiagnostics = builder.comment("Enable recurring Cold Sweat client HUD readout diagnostics at debug level.",
+                        "This samples client temperature state and can be noisy in debug.log.")
+                .define("coldSweatClientDiagnostics", false);
         fullMelting = builder.comment("Enable alternative snow melting algorithm that can melt full snow blocks left by other mods, requires Serene Seasons to work.")
                 .define("fullMelting", false);
         alternativeTornadoStrengthGrabbing = builder.comment("Enable alternative tornado strength grabbing, limiting debug output, optimizing performance and allowing more blocks to grab.")

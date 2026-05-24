@@ -12,6 +12,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.biome.Biome;
@@ -71,14 +74,21 @@ public class ArcticSpawner {
         }
         if (entityType.is(SpawnEcology.REQUIRE_COLD)) {
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
+            boolean exposedToSky = ClimateService.isExposedToSky(level, pos);
+            ClimateSnapshot.WeatherState weatherState = ClimateService.weatherStateAt(level, biome, exposedToSky);
             var temp = getTemperature(level, biome, pos);
             float dryTemperature = temp;
             boolean rainCooling = false;
-            if (isRainCooling(level, biome, pos)) {
+            if (weatherState != ClimateSnapshot.WeatherState.CLEAR && biome.value().hasPrecipitation()) {
                 rainCooling = true;
-                dryTemperature = ClimateService.clearOutdoorMinecraftTemperature(level, biome, pos);
+                dryTemperature = ClimateService.clearOutdoorMinecraftTemperature(level, biome, pos, exposedToSky);
             }
-            return SpawnEcology.undeadFactor(biome, temp, dryTemperature, getCaveFactor(level, pos), rainCooling);
+            float factor = SpawnEcology.undeadFactor(biome, temp, dryTemperature, getCaveFactor(level, pos), rainCooling);
+            return SpawnEcology.undeadSurfaceWeatherFactor(
+                    factor,
+                    isSnowOrIceSurface(level.getBlockState(pos.below())),
+                    isActivelySnowing(biome, weatherState, temp)
+            );
         } else if (entityType.is(SpawnEcology.REQUIRE_AUTUMN_OR_DEEP)) {
             var caveFactor = getCaveFactor(level, pos);
             var deepFactor = caveFactor >= 0.5F ? 1.0F : 0.0F;
@@ -129,6 +139,34 @@ public class ArcticSpawner {
             boolean nearUndergroundLavaLake,
             float factor
     ) {
+    }
+
+    public static boolean isUndeadColdSpawnSurface(BlockState state, EntityType<?> entityType) {
+        return entityType.is(SpawnEcology.REQUIRE_COLD) && (isIceSurface(state) || isLayeredSnow(state));
+    }
+
+    private static boolean isLayeredSnow(BlockState state) {
+        return state.is(Blocks.SNOW)
+                && state.hasProperty(SnowLayerBlock.LAYERS);
+    }
+
+    private static boolean isActivelySnowing(Holder<Biome> biome, ClimateSnapshot.WeatherState weatherState, float outdoorMinecraftTemperature) {
+        return weatherState != ClimateSnapshot.WeatherState.CLEAR
+                && ClimateService.precipitationKind(biome, outdoorMinecraftTemperature) == ClimateSnapshot.PrecipitationKind.SNOW;
+    }
+
+    private static boolean isSnowOrIceSurface(BlockState state) {
+        return state.is(Blocks.SNOW)
+                || state.is(Blocks.SNOW_BLOCK)
+                || state.is(Blocks.POWDER_SNOW)
+                || isIceSurface(state);
+    }
+
+    private static boolean isIceSurface(BlockState state) {
+        return state.is(Blocks.ICE)
+                || state.is(Blocks.PACKED_ICE)
+                || state.is(Blocks.BLUE_ICE)
+                || state.is(Blocks.FROSTED_ICE);
     }
 
     private static float autumnProgressionFactor(ServerLevel level) {

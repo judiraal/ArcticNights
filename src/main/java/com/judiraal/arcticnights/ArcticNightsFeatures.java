@@ -12,6 +12,14 @@ public final class ArcticNightsFeatures {
         return ArcticNightsConfig.debugCommands.getAsBoolean();
     }
 
+    public static boolean spawnDiagnostics() {
+        return ArcticNightsConfig.spawnDiagnostics.getAsBoolean();
+    }
+
+    public static boolean coldSweatClientDiagnostics() {
+        return ArcticNightsConfig.coldSweatClientDiagnostics.getAsBoolean();
+    }
+
     public static boolean arcticSpawning() {
         return ArcticNightsConfig.arcticSpawning.getAsBoolean();
     }

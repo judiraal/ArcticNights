@@ -3,6 +3,7 @@ package com.judiraal.arcticnights;
 import com.judiraal.arcticnights.command.ArcticNightsCommands;
 import com.judiraal.arcticnights.compat.ConditionalSubscribers;
 import com.judiraal.arcticnights.util.ArcticSpawner;
+import com.judiraal.arcticnights.util.UndeadSpawnDiagnostics;
 import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.BlockPos;
@@ -22,6 +23,7 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.storage.ServerLevelData;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
@@ -87,6 +89,22 @@ public class ArcticNights {
         }
     }
 
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onSpawnPlacementCheckDiagnostics(MobSpawnEvent.SpawnPlacementCheck event) {
+        if (!spawnDiagnosticsLogging()
+                || !ArcticNightsFeatures.arcticSpawning()
+                || event.getSpawnType() != MobSpawnType.NATURAL) return;
+        ServerLevel level = event.getLevel().getLevel();
+        if (!appliesTo(level)) return;
+
+        String result = switch (event.getResult()) {
+            case SUCCEED -> "placement_forced_pass";
+            case FAIL -> "placement_fail_event";
+            case DEFAULT -> event.getDefaultResult() ? "placement_pass" : "placement_fail_default";
+        };
+        UndeadSpawnDiagnostics.recordLifecycle(level, event.getPos(), event.getEntityType(), result);
+    }
+
     @SubscribeEvent
     public static void onSpawnPositionCheck(MobSpawnEvent.PositionCheck event) {
         if (!ArcticNightsFeatures.arcticSpawning() || event.getSpawnType() != MobSpawnType.NATURAL) return;
@@ -104,13 +122,52 @@ public class ArcticNights {
         }
     }
 
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onSpawnPositionCheckDiagnostics(MobSpawnEvent.PositionCheck event) {
+        if (!spawnDiagnosticsLogging()
+                || !ArcticNightsFeatures.arcticSpawning()
+                || event.getSpawnType() != MobSpawnType.NATURAL) return;
+        ServerLevel level = event.getLevel().getLevel();
+        if (!appliesTo(level)) return;
+
+        String result = switch (event.getResult()) {
+            case SUCCEED -> "position_forced_pass";
+            case FAIL -> "position_fail_event";
+            case DEFAULT -> {
+                boolean rules = event.getEntity().checkSpawnRules(level, event.getSpawnType());
+                boolean obstruction = rules && event.getEntity().checkSpawnObstruction(level);
+                if (!rules) {
+                    yield "position_fail_rules";
+                }
+                yield obstruction ? "position_pass" : "position_fail_obstruction";
+            }
+        };
+        UndeadSpawnDiagnostics.recordLifecycle(level, event.getEntity().blockPosition(), event.getEntity().getType(), result);
+    }
+
     @SubscribeEvent
     public static void onFinalizeSpawn(FinalizeSpawnEvent event) {
-        if (!ArcticNightsFeatures.debugCommands() || event.getEntity().getType() != EntityType.CREEPER) return;
+        if (!spawnDiagnosticsLogging() || event.getEntity().getType() != EntityType.CREEPER) return;
         ServerLevel level = event.getLevel().getLevel();
         if (!appliesTo(level)) return;
         BlockPos pos = event.getEntity().blockPosition();
         logCreeperSpawn("finalize", event.getSpawnType(), pos, ArcticSpawner.creeperSpawnProbe(pos, level));
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onFinalizeSpawnDiagnostics(FinalizeSpawnEvent event) {
+        if (!spawnDiagnosticsLogging()
+                || !ArcticNightsFeatures.arcticSpawning()
+                || event.getSpawnType() != MobSpawnType.NATURAL) return;
+        ServerLevel level = event.getLevel().getLevel();
+        if (!appliesTo(level)) return;
+
+        boolean canceled = event.isCanceled() || event.isSpawnCancelled();
+        UndeadSpawnDiagnostics.recordFinalize(
+                level,
+                event.getEntity(),
+                canceled ? "finalize_canceled" : "finalize",
+                !canceled);
     }
 
     @SubscribeEvent
@@ -118,15 +175,19 @@ public class ArcticNights {
         if (event.getEntity().getType() != EntityType.CREEPER) return;
         if (!(event.getLevel() instanceof ServerLevel level) || !appliesTo(level)) return;
 
+        boolean arcticSpawning = ArcticNightsFeatures.arcticSpawning();
+        boolean spawnDiagnostics = spawnDiagnosticsLogging();
+        if (!arcticSpawning && !spawnDiagnostics) return;
+
         BlockPos pos = event.getEntity().blockPosition();
         ArcticSpawner.CreeperSpawnProbe probe = ArcticSpawner.creeperSpawnProbe(pos, level);
-        boolean denied = ArcticNightsFeatures.arcticSpawning() && probe.factor() == 0.0F;
+        boolean denied = arcticSpawning && probe.factor() == 0.0F;
         if (denied) {
             event.setCanceled(true);
             event.getEntity().discard();
         }
 
-        if (!ArcticNightsFeatures.debugCommands()) return;
+        if (!spawnDiagnostics) return;
         String action = denied ? "join-deny" : "join";
         logCreeperJoin(action, event, pos, probe, denied);
         if (denied) {
@@ -134,9 +195,16 @@ public class ArcticNights {
         }
     }
 
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onEntityJoinLevelDiagnostics(EntityJoinLevelEvent event) {
+        if (!spawnDiagnosticsLogging()) return;
+        if (!(event.getLevel() instanceof ServerLevel level) || !appliesTo(level)) return;
+        UndeadSpawnDiagnostics.recordJoin(level, event.getEntity(), event.isCanceled());
+    }
+
     private static void logCreeperSpawn(String action, MobSpawnType spawnType, BlockPos pos, ArcticSpawner.CreeperSpawnProbe probe) {
-        if (!ArcticNightsFeatures.debugCommands()) return;
-        LOGGER.info("ANSPAWN creeper {} spawnType={} gate={} pos={} {} {} biome={} tempC={} mcTemp={} factor={} cave={} lava={}",
+        if (!spawnDiagnosticsLogging()) return;
+        LOGGER.debug("ANSPAWN creeper {} spawnType={} gate={} pos={} {} {} biome={} tempC={} mcTemp={} factor={} cave={} lava={}",
                 action,
                 spawnType,
                 ArcticNightsFeatures.arcticSpawning() ? "active" : "disabled",
@@ -152,7 +220,8 @@ public class ArcticNights {
     }
 
     private static void logCreeperJoin(String action, EntityJoinLevelEvent event, BlockPos pos, ArcticSpawner.CreeperSpawnProbe probe, boolean denied) {
-        LOGGER.info("ANSPAWN creeper {} loadedFromDisk={} canceled={} gate={} uuid={} pos={} {} {} biome={} tempC={} mcTemp={} factor={} cave={} lava={} tags={} source={}",
+        if (!spawnDiagnosticsLogging()) return;
+        LOGGER.debug("ANSPAWN creeper {} loadedFromDisk={} canceled={} gate={} uuid={} pos={} {} {} biome={} tempC={} mcTemp={} factor={} cave={} lava={} tags={} source={}",
                 action,
                 event.loadedFromDisk(),
                 denied,
@@ -172,7 +241,8 @@ public class ArcticNights {
     }
 
     private static void logCreeperJoinStack(String action, EntityJoinLevelEvent event, BlockPos pos) {
-        LOGGER.info("ANSPAWN creeper stack action={} loadedFromDisk={} uuid={} pos={} {} {}",
+        if (!spawnDiagnosticsLogging()) return;
+        LOGGER.debug("ANSPAWN creeper stack action={} loadedFromDisk={} uuid={} pos={} {} {}",
                 action,
                 event.loadedFromDisk(),
                 event.getEntity().getUUID(),
@@ -180,6 +250,10 @@ public class ArcticNights {
                 pos.getY(),
                 pos.getZ(),
                 new Throwable("Creeper EntityJoinLevelEvent source stack"));
+    }
+
+    private static boolean spawnDiagnosticsLogging() {
+        return ArcticNightsFeatures.spawnDiagnostics() && LOGGER.isDebugEnabled();
     }
 
     private static String stackSourceHint() {
@@ -234,14 +308,22 @@ public class ArcticNights {
                 if (factor == 0.0F) {
                     event.removeSpawnerData(data);
                     removedWeight += data.getWeight().asInt();
+                    UndeadSpawnDiagnostics.recordPotential(level, event.getPos(), data.type, factor, "removed_zero");
                 }
                 else if (factor < 1.0F && event.getLevel().getRandom().nextFloat() > factor) {
                     event.removeSpawnerData(data);
                     removedWeight += data.getWeight().asInt();
+                    UndeadSpawnDiagnostics.recordPotential(level, event.getPos(), data.type, factor, "removed_roll");
                 }
-                else if (factor >= 2.0F) for (var i = 1; i < (int)factor; i++) {
-                    event.addSpawnerData(data);
-                    removedWeight -= data.getWeight().asInt();
+                else if (factor >= 2.0F) {
+                    int copies = (int)factor;
+                    for (var i = 1; i < copies; i++) {
+                        event.addSpawnerData(data);
+                        removedWeight -= data.getWeight().asInt();
+                    }
+                    UndeadSpawnDiagnostics.recordPotential(level, event.getPos(), data.type, factor, "boosted_" + copies + "x");
+                } else {
+                    UndeadSpawnDiagnostics.recordPotential(level, event.getPos(), data.type, factor, factor < 1.0F ? "kept_roll" : "kept");
                 }
             }
             if (removedWeight > (totalWeight>>1) && event.getLevel().getRandom().nextFloat() > Mth.square((float)(totalWeight-removedWeight)/totalWeight)) {

@@ -278,7 +278,13 @@ public final class ClimateAuditReporter {
     private static SpawnMatrixRow spawnRow(String biomeId, List<String> tags, Holder<Biome> biome, SourceOrderTier tier, String archetype, SeasonSample season, WeatherSample weather, LatitudeSample latitude, Sample sample, TimeSample time, ClimateSnapshot snapshot, PhaseEntityGateConfig phaseEntityGates) {
         float spawnTemperature = spawnTemperature(snapshot);
         float autumnProgressionFactor = autumnProgressionFactor(season.subSeasonOrdinal());
-        float undeadFactor = SpawnEcology.undeadFactor(biome, spawnTemperature, snapshot.clearOutdoorMinecraftTemperature(), 0.0F, snapshot.rainCooling());
+        boolean snowOrIceSurface = snapshot.snowBehavior() != ClimateSnapshot.SnowBehavior.MELTS;
+        boolean activelySnowing = SpawnEcology.activelySnowing(snapshot);
+        float undeadFactor = SpawnEcology.undeadSurfaceWeatherFactor(
+                SpawnEcology.undeadFactor(biome, spawnTemperature, snapshot.clearOutdoorMinecraftTemperature(), 0.0F, snapshot.rainCooling()),
+                snowOrIceSurface,
+                activelySnowing
+        );
         float creeperFactor = SpawnEcology.creeperFactor(biome, snapshot, 0.0F);
         float spiderFactor = SpawnEcology.spiderFactor(autumnProgressionFactor, snapshot, 0.0F);
         BlockPos pos = sample.pos(latitude);
@@ -292,6 +298,9 @@ public final class ClimateAuditReporter {
                 removedEntries.add(entry.id());
                 climateModified = true;
                 continue;
+            }
+            if (entry.type().is(SpawnEcology.REQUIRE_COLD)) {
+                factor = SpawnEcology.undeadSurfaceWeatherFactor(factor, snowOrIceSurface, activelySnowing);
             }
             if (factor != 1.0F) climateModified = true;
             expectedEntries.add(entry.withFactor(factor));

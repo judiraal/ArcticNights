@@ -17,6 +17,7 @@ function initializeCoreMod() {
                         var instructions = methodNode.instructions;
                         for (var insn of instructions) {
                             if (insn.getOpcode() === Opcodes.INVOKEINTERFACE) {
+                                // Descriptor-sensitive coremod: smoke-test brightness after Minecraft/NeoForge updates.
                                 var patchList = new InsnList();
                                 patchList.add(new VarInsnNode(Opcodes.ALOAD, 1));
                                 patchList.add(new MethodInsnNode(Opcodes.INVOKESTATIC, 'com/judiraal/arcticnights/util/Calculations', "seasonalSkyDarken", "(Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;)I"));
