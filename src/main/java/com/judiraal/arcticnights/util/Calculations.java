@@ -77,15 +77,15 @@ public class Calculations {
       */
     public static float seasonalFactor(Level level) {
         if (!ArcticNights.appliesTo(level)) return 0.0F;
+        int daysPerSeason = ArcticNightsConfig.daysPerSeason.get();
+        if (daysPerSeason == 0) return 0.0F;
 
-        int day = 80;
-        int dpy = ArcticNightsConfig.daysPerSeason.get() << 2;
-        if (dpy > 0) {
-            if (ArcticNights.SERENE_SEASONS) {
-                day = SereneSeasonsCompat.HOLDER.getDay(level);
-            } else {
-                day = (int)((level.getDayTime() / 24000) * 96 / dpy);
-            }
+        int day;
+        if (ArcticNights.SERENE_SEASONS) {
+            day = SereneSeasonsCompat.HOLDER.getDay(level);
+        } else {
+            int daysPerYear = daysPerSeason << 2;
+            day = (int)((level.getDayTime() / 24000) * 96 / daysPerYear);
         }
         return Mth.cos((float)(day - 32) / 48 * Mth.PI);
     }
