@@ -8,10 +8,6 @@ public final class ArcticNightsFeatures {
         return ArcticNightsConfig.climateSystem.getAsBoolean();
     }
 
-    public static boolean debugCommands() {
-        return ArcticNightsConfig.debugCommands.getAsBoolean();
-    }
-
     public static boolean spawnDiagnostics() {
         return ArcticNightsConfig.spawnDiagnostics.getAsBoolean();
     }

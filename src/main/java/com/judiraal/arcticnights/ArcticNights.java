@@ -1,6 +1,5 @@
 package com.judiraal.arcticnights;
 
-import com.judiraal.arcticnights.command.ArcticNightsCommands;
 import com.judiraal.arcticnights.compat.ConditionalSubscribers;
 import com.judiraal.arcticnights.util.ArcticSpawner;
 import com.judiraal.arcticnights.util.UndeadSpawnDiagnostics;
@@ -37,7 +36,6 @@ import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.SpawnClusterSizeEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.slf4j.Logger;
 
 import java.util.Locale;
@@ -72,12 +70,6 @@ public class ArcticNights {
                 serverLevel.getLevelData() instanceof ServerLevelData data) {
             data.setDayTime(ArcticNightsConfig.firstTimeOfDay.get());
         }
-    }
-
-    @SubscribeEvent
-    public static void onRegisterCommands(RegisterCommandsEvent event) {
-        if (!ArcticNightsFeatures.debugCommands()) return;
-        ArcticNightsCommands.register(event.getDispatcher());
     }
 
     @SubscribeEvent
