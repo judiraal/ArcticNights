@@ -8,6 +8,10 @@ public final class ArcticNightsFeatures {
         return ArcticNightsConfig.climateSystem.getAsBoolean();
     }
 
+    public static boolean debugCommands() {
+        return ArcticNightsConfig.debugCommands.getAsBoolean();
+    }
+
     public static boolean spawnDiagnostics() {
         return ArcticNightsConfig.spawnDiagnostics.getAsBoolean();
     }
@@ -26,5 +30,17 @@ public final class ArcticNightsFeatures {
 
     public static boolean fullMeltingUsesClimate() {
         return fullMelting() && climateSystem();
+    }
+
+    public static boolean unloadedClimateCatchup() {
+        return climateSystem() && ArcticNightsConfig.unloadedClimateCatchup.getAsBoolean();
+    }
+
+    public static boolean unloadedClimateCatchupDebug() {
+        return ArcticNightsConfig.unloadedClimateCatchupDebug.getAsBoolean();
+    }
+
+    public static boolean catchupNewChunksFromWorldStart() {
+        return unloadedClimateCatchup() && ArcticNightsConfig.catchupNewChunksFromWorldStart.getAsBoolean();
     }
 }

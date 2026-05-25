@@ -3,8 +3,10 @@ package com.judiraal.arcticnights.mixin.minecraft;
 import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.Calculations;
 import com.judiraal.arcticnights.util.ClimateService;
+import com.judiraal.arcticnights.util.ClimateVisualWeatherState;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.math.Axis;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.core.BlockPos;
@@ -34,13 +36,20 @@ public class LevelRendererMixin {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
     private Biome.Precipitation arcticnights$renderPrecipitationAt(Biome biome, BlockPos pos) {
         if (!ArcticNightsFeatures.climateSystem()) return biome.getPrecipitationAt(pos);
-        return ClimateService.precipitationAtAsVanillaType(this.level, this.level.getBiome(pos), pos);
+        return arcticnights$precipitationAt(pos);
     }
 
     @Redirect(method = "tickRain",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
     private Biome.Precipitation arcticnights$tickRainPrecipitationAt(Biome biome, BlockPos pos) {
         if (!ArcticNightsFeatures.climateSystem()) return biome.getPrecipitationAt(pos);
+        return arcticnights$precipitationAt(pos);
+    }
+
+    private Biome.Precipitation arcticnights$precipitationAt(BlockPos pos) {
+        Biome.Precipitation synced = ClimateVisualWeatherState.precipitationAt(Minecraft.getInstance().player, pos);
+        if (synced != null) return synced;
+
         return ClimateService.precipitationAtAsVanillaType(this.level, this.level.getBiome(pos), pos);
     }
 }

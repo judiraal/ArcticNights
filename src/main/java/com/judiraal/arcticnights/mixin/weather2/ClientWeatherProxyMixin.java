@@ -2,6 +2,7 @@ package com.judiraal.arcticnights.mixin.weather2;
 
 import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.ClimateService;
+import com.judiraal.arcticnights.util.ClimateVisualWeatherState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.biome.Biome;
@@ -21,7 +22,10 @@ public class ClientWeatherProxyMixin {
         if (minecraft.level == null || minecraft.player == null || biome == null) return;
 
         BlockPos pos = minecraft.player.blockPosition();
-        Biome.Precipitation precipitation = ClimateService.precipitationAtAsVanillaType(minecraft.level, minecraft.level.getBiome(pos), pos);
+        Biome.Precipitation precipitation = ClimateVisualWeatherState.precipitationAt(minecraft.player, pos);
+        if (precipitation == null) {
+            precipitation = ClimateService.precipitationAtAsVanillaType(minecraft.level, minecraft.level.getBiome(pos), pos);
+        }
         cir.setReturnValue(switch (precipitation) {
             case NONE -> null;
             case RAIN -> PrecipitationType.NORMAL;

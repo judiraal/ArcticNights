@@ -1,8 +1,12 @@
 package com.judiraal.arcticnights;
 
+import com.judiraal.arcticnights.command.ClimateCatchupCommands;
 import com.judiraal.arcticnights.compat.ConditionalSubscribers;
 import com.judiraal.arcticnights.util.ArcticSpawner;
+import com.judiraal.arcticnights.util.ClimateCatchupQueue;
+import com.judiraal.arcticnights.util.ClimateDebugWeatherNetworking;
 import com.judiraal.arcticnights.util.ClimateService;
+import com.judiraal.arcticnights.util.ClimateVisualWeatherNetworking;
 import com.judiraal.arcticnights.util.UndeadSpawnDiagnostics;
 import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
 import com.mojang.logging.LogUtils;
@@ -32,12 +36,15 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.common.data.internal.NeoForgeBiomeTagsProvider;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.SpawnClusterSizeEvent;
+import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.slf4j.Logger;
 
 import java.util.Locale;
@@ -62,12 +69,25 @@ public class ArcticNights {
     public ArcticNights(IEventBus modEventBus, ModContainer modContainer) {
         ConditionalSubscribers.inject(modContainer);
         modContainer.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
+        modEventBus.addListener(ClimateDebugWeatherNetworking::registerPayloads);
+        modEventBus.addListener(ClimateVisualWeatherNetworking::registerPayloads);
         ArcticNightsDensityFunctionTypes.TYPES.register(modEventBus);
     }
 
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         ClimateService.clearDebugWeatherOffset(event.getServer());
+        ClimateCatchupQueue.onServerStopped(event);
+    }
+
+    @SubscribeEvent
+    public static void onRegisterCommands(RegisterCommandsEvent event) {
+        ClimateCatchupCommands.register(event.getDispatcher());
+    }
+
+    @SubscribeEvent
+    public static void onServerTick(ServerTickEvent.Post event) {
+        ClimateCatchupQueue.onServerTick(event);
     }
 
     @SubscribeEvent
@@ -77,6 +97,16 @@ public class ArcticNights {
                 serverLevel.getLevelData() instanceof ServerLevelData data) {
             data.setDayTime(ArcticNightsConfig.firstTimeOfDay.get());
         }
+    }
+
+    @SubscribeEvent
+    public static void onChunkLoad(ChunkEvent.Load event) {
+        ClimateCatchupQueue.onChunkLoad(event);
+    }
+
+    @SubscribeEvent
+    public static void onChunkUnload(ChunkEvent.Unload event) {
+        ClimateCatchupQueue.onChunkUnload(event);
     }
 
     @SubscribeEvent

@@ -9,6 +9,7 @@ import net.minecraft.world.level.Level;
 final class ClimateDebugWeatherOverrides {
     private static final Map<MinecraftServer, Float> OFFSETS_BY_SERVER =
             Collections.synchronizedMap(new WeakHashMap<>());
+    private static volatile float clientOffset = Float.NaN;
 
     private ClimateDebugWeatherOverrides() {
     }
@@ -27,7 +28,7 @@ final class ClimateDebugWeatherOverrides {
 
     static float minecraftOffset(Level level) {
         MinecraftServer server = level.getServer();
-        return server == null ? Float.NaN : minecraftOffset(server);
+        return server == null ? clientOffset : minecraftOffset(server);
     }
 
     static double celsiusOffset(MinecraftServer server) {
@@ -38,5 +39,13 @@ final class ClimateDebugWeatherOverrides {
     private static float minecraftOffset(MinecraftServer server) {
         Float offset = OFFSETS_BY_SERVER.get(server);
         return offset == null ? Float.NaN : offset;
+    }
+
+    static void setClientCelsius(double celsiusOffset) {
+        clientOffset = ClimateService.celsiusOffsetToMinecraftTemperatureOffset(celsiusOffset);
+    }
+
+    static void clearClient() {
+        clientOffset = Float.NaN;
     }
 }

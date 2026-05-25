@@ -90,9 +90,13 @@ public final class ClimateService {
         return snapshot(level, biome, pos, exposedToSky, weatherState, seasonFactorOverride, dayTime);
     }
 
+    public static ClimateSnapshot sampleSnapshot(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, long dayTime) {
+        return snapshot(level, biome, pos, exposedToSky, weatherState, null, dayTime);
+    }
+
     private static ClimateSnapshot snapshot(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
         weatherState = effectiveWeatherState(biome, exposedToSky, weatherState);
-        float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactorOverride);
+        float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactorOverride, dayTime);
         float dayNightOffset = dayNightOffset(biome, dayTime);
         float weatherCompression = weatherCompression(weatherState, exposedToSky);
         float outdoorMinecraftTemperature = outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression);
@@ -120,7 +124,7 @@ public final class ClimateService {
         float seasonOffset = seasonOffset(seasonFactor, poleFactor);
         float biomeOffset = biomeOffset(biome);
         float baseTemperature = baseTemperature(latitudeMean, seasonOffset, biomeOffset);
-        float weatherOffset = climateAnomaly(level, pos, seasonFactor, weatherState, baseTemperature);
+        float weatherOffset = climateAnomaly(level, pos, seasonFactor, weatherState, baseTemperature, dayTime);
         float minecraftTemperature = baseTemperature + weatherOffset;
         float dayNightOffset = dayNightOffset(biome, dayTime);
         float weatherCompression = weatherCompression(weatherState, exposedToSky);
@@ -174,7 +178,7 @@ public final class ClimateService {
     }
 
     private static float outdoorMinecraftTemperature(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
-        float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactorOverride);
+        float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactorOverride, dayTime);
         float dayNightOffset = dayNightOffset(biome, dayTime);
         return outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression(weatherState, exposedToSky));
     }
@@ -285,9 +289,13 @@ public final class ClimateService {
     }
 
     private static float minecraftTemperature(Level level, Holder<Biome> biome, BlockPos pos, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride) {
+        return minecraftTemperature(level, biome, pos, weatherState, seasonFactorOverride, level.getDayTime());
+    }
+
+    private static float minecraftTemperature(Level level, Holder<Biome> biome, BlockPos pos, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
         float seasonFactor = seasonFactor(level, seasonFactorOverride);
         float baseTemperature = baseTemperature(biome, pos, seasonFactor);
-        return baseTemperature + climateAnomaly(level, pos, seasonFactor, weatherState, baseTemperature);
+        return baseTemperature + climateAnomaly(level, pos, seasonFactor, weatherState, baseTemperature, dayTime);
     }
 
     private static float seasonFactor(Level level, @Nullable Float seasonFactorOverride) {
@@ -295,7 +303,7 @@ public final class ClimateService {
         return Calculations.seasonalFactor(level);
     }
 
-    private static float climateAnomaly(Level level, BlockPos pos, float seasonFactor, ClimateSnapshot.WeatherState weatherState, float baseTemperature) {
+    private static float climateAnomaly(Level level, BlockPos pos, float seasonFactor, ClimateSnapshot.WeatherState weatherState, float baseTemperature, long dayTime) {
         float debugWeatherOffset = ClimateDebugWeatherOverrides.minecraftOffset(level);
         if (!Float.isNaN(debugWeatherOffset)) return debugWeatherOffset;
 
@@ -309,7 +317,7 @@ public final class ClimateService {
             case THUNDER -> 1.0F;
         };
         float amplitude = maxAmplitude * seasonalScale * weatherScale;
-        float anomaly = interpolatedWeatherAnomaly(level.getDayTime(), pos, amplitude);
+        float anomaly = interpolatedWeatherAnomaly(dayTime, pos, amplitude);
 
         if (weatherState != ClimateSnapshot.WeatherState.CLEAR) {
             if (anomaly < 0.0F) {
@@ -492,7 +500,11 @@ public final class ClimateService {
     }
 
     public static boolean shouldFreeze(LevelReader levelReader, Holder<Biome> biome, BlockPos water, boolean mustBeAtEdge) {
-        if (warmEnoughToRain(levelReader, biome, water)) return false;
+        return shouldFreeze(levelReader, biome, water, mustBeAtEdge, outdoorMinecraftTemperatureForSnowTest(levelReader, biome, water));
+    }
+
+    public static boolean shouldFreeze(LevelReader levelReader, Holder<Biome> biome, BlockPos water, boolean mustBeAtEdge, float outdoorMinecraftTemperature) {
+        if (warmEnoughToRain(outdoorMinecraftTemperature)) return false;
         if (water.getY() < levelReader.getMinBuildHeight()
                 || water.getY() >= levelReader.getMaxBuildHeight()
                 || levelReader.getBrightness(LightLayer.BLOCK, water) >= 10) {
@@ -512,7 +524,11 @@ public final class ClimateService {
     }
 
     public static boolean shouldSnow(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
-        if (warmEnoughToRain(levelReader, biome, pos)) return false;
+        return shouldSnow(levelReader, biome, pos, outdoorMinecraftTemperatureForSnowTest(levelReader, biome, pos));
+    }
+
+    public static boolean shouldSnow(LevelReader levelReader, Holder<Biome> biome, BlockPos pos, float outdoorMinecraftTemperature) {
+        if (warmEnoughToRain(outdoorMinecraftTemperature)) return false;
         if (pos.getY() < levelReader.getMinBuildHeight()
                 || pos.getY() >= levelReader.getMaxBuildHeight()
                 || levelReader.getBrightness(LightLayer.BLOCK, pos) >= 10) {
@@ -527,8 +543,18 @@ public final class ClimateService {
     }
 
     public static boolean warmEnoughToRain(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
-        if (!(levelReader instanceof Level level)) return biome.value().warmEnoughToRain(pos);
-        return outdoorMinecraftTemperature(level, biome, pos, true) >= SNOW_THRESHOLD;
+        return warmEnoughToRain(outdoorMinecraftTemperatureForSnowTest(levelReader, biome, pos));
+    }
+
+    public static boolean warmEnoughToRain(float outdoorMinecraftTemperature) {
+        return outdoorMinecraftTemperature >= SNOW_THRESHOLD;
+    }
+
+    private static float outdoorMinecraftTemperatureForSnowTest(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
+        if (!(levelReader instanceof Level level)) {
+            return biome.value().warmEnoughToRain(pos) ? SNOW_THRESHOLD : SNOW_THRESHOLD - 0.001F;
+        }
+        return outdoorMinecraftTemperature(level, biome, pos, true);
     }
 
     public static ClimateSnapshot.SnowBehavior snowBehavior(float minecraftTemperature) {
@@ -551,10 +577,12 @@ public final class ClimateService {
 
     public static void setDebugWeatherOffsetCelsius(MinecraftServer server, double celsiusOffset) {
         ClimateDebugWeatherOverrides.setCelsius(server, celsiusOffset);
+        ClimateDebugWeatherNetworking.syncAll(server);
     }
 
     public static void clearDebugWeatherOffset(MinecraftServer server) {
         ClimateDebugWeatherOverrides.clear(server);
+        ClimateDebugWeatherNetworking.syncAll(server);
     }
 
     public static boolean hasDebugWeatherOffset(MinecraftServer server) {

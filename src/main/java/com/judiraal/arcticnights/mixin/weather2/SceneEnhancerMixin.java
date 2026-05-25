@@ -2,6 +2,9 @@ package com.judiraal.arcticnights.mixin.weather2;
 
 import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.ClimateService;
+import com.judiraal.arcticnights.util.ClimateVisualWeatherState;
+import extendedrenderer.particle.entity.ParticleTexFX;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
@@ -34,12 +37,42 @@ public class SceneEnhancerMixin {
     @Inject(method = "shouldRainHere", at = @At("HEAD"), cancellable = true)
     private static void arcticnights$shouldRainHere(Level level, Biome biome, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
         if (!ArcticNightsFeatures.climateSystem()) return;
-        cir.setReturnValue(ClimateService.precipitationAtAsVanillaType(level, level.getBiome(pos), pos) == Biome.Precipitation.RAIN);
+        cir.setReturnValue(arcticnights$precipitationAt(level, pos) == Biome.Precipitation.RAIN);
     }
 
     @Inject(method = "shouldSnowHere", at = @At("HEAD"), cancellable = true)
     private static void arcticnights$shouldSnowHere(Level level, Biome biome, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
         if (!ArcticNightsFeatures.climateSystem()) return;
-        cir.setReturnValue(ClimateService.precipitationAtAsVanillaType(level, level.getBiome(pos), pos) == Biome.Precipitation.SNOW);
+        cir.setReturnValue(arcticnights$precipitationAt(level, pos) == Biome.Precipitation.SNOW);
+    }
+
+    @Redirect(method = "tickEnvironmentalParticleSpawning",
+            at = @At(value = "INVOKE", target = "Lextendedrenderer/particle/entity/ParticleTexFX;spawnAsWeatherEffect()V", ordinal = 0))
+    private void arcticnights$spawnRainGroundSplashWhenServerRain(ParticleTexFX particle) {
+        if (arcticnights$serverSaysRainAtClientPlayer()) {
+            particle.spawnAsWeatherEffect();
+        }
+    }
+
+    @Redirect(method = "tickEnvironmentalParticleSpawning",
+            at = @At(value = "INVOKE", target = "Lextendedrenderer/particle/entity/ParticleTexFX;spawnAsWeatherEffect()V", ordinal = 1))
+    private void arcticnights$spawnRainDownfallWhenServerRain(ParticleTexFX particle) {
+        if (arcticnights$serverSaysRainAtClientPlayer()) {
+            particle.spawnAsWeatherEffect();
+        }
+    }
+
+    private static Biome.Precipitation arcticnights$precipitationAt(Level level, BlockPos pos) {
+        Minecraft minecraft = Minecraft.getInstance();
+        Biome.Precipitation synced = ClimateVisualWeatherState.precipitationAt(minecraft.player, pos);
+        if (synced != null) return synced;
+
+        return ClimateService.precipitationAtAsVanillaType(level, level.getBiome(pos), pos);
+    }
+
+    private static boolean arcticnights$serverSaysRainAtClientPlayer() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.player == null) return true;
+        return arcticnights$precipitationAt(minecraft.level, minecraft.player.blockPosition()) == Biome.Precipitation.RAIN;
     }
 }
