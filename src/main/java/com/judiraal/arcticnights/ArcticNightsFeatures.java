@@ -32,18 +32,6 @@ public final class ArcticNightsFeatures {
         return fullMelting() && climateSystem();
     }
 
-    public static boolean unloadedClimateCatchup() {
-        return climateSystem() && ArcticNightsConfig.unloadedClimateCatchup.getAsBoolean();
-    }
-
-    public static boolean unloadedClimateCatchupDebug() {
-        return ArcticNightsConfig.unloadedClimateCatchupDebug.getAsBoolean();
-    }
-
-    public static boolean catchupNewChunksFromWorldStart() {
-        return unloadedClimateCatchup() && ArcticNightsConfig.catchupNewChunksFromWorldStart.getAsBoolean();
-    }
-
     public static boolean tickrateClimateCatchup() {
         return climateSystem() && ArcticNightsConfig.tickrateClimateCatchup.getAsBoolean();
     }

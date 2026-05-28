@@ -3,7 +3,6 @@ package com.judiraal.arcticnights;
 import com.judiraal.arcticnights.command.ClimateCatchupCommands;
 import com.judiraal.arcticnights.compat.ConditionalSubscribers;
 import com.judiraal.arcticnights.util.ArcticSpawner;
-import com.judiraal.arcticnights.util.ClimateCatchupQueue;
 import com.judiraal.arcticnights.util.ClimateDebugWeatherNetworking;
 import com.judiraal.arcticnights.util.ClimatePlayerHarness;
 import com.judiraal.arcticnights.util.ClimateService;
@@ -43,7 +42,6 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.entity.living.SpawnClusterSizeEvent;
-import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -81,7 +79,6 @@ public class ArcticNights {
     public static void onServerStopped(ServerStoppedEvent event) {
         ClimatePlayerHarness.onServerStopped(event);
         ClimateService.clearDebugWeatherOffset(event.getServer());
-        ClimateCatchupQueue.onServerStopped(event);
         ClimateTickrateCatchup.onServerStopped(event);
     }
 
@@ -93,7 +90,6 @@ public class ArcticNights {
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         ClimatePlayerHarness.onServerTick(event);
-        ClimateCatchupQueue.onServerTick(event);
         ClimateTickrateCatchup.onServerTick(event);
     }
 
@@ -104,16 +100,6 @@ public class ArcticNights {
                 serverLevel.getLevelData() instanceof ServerLevelData data) {
             data.setDayTime(ArcticNightsConfig.firstTimeOfDay.get());
         }
-    }
-
-    @SubscribeEvent
-    public static void onChunkLoad(ChunkEvent.Load event) {
-        ClimateCatchupQueue.onChunkLoad(event);
-    }
-
-    @SubscribeEvent
-    public static void onChunkUnload(ChunkEvent.Unload event) {
-        ClimateCatchupQueue.onChunkUnload(event);
     }
 
     @SubscribeEvent

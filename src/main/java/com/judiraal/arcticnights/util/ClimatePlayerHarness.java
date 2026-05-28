@@ -110,16 +110,18 @@ public final class ClimatePlayerHarness {
     }
 
     private static String chunkReport(ServerLevel level, ChunkPos pos) {
-        ClimateCatchupQueue.ProfileResult profile = ClimateCatchupQueue.profile(level, pos);
-        ClimateCatchupQueue.InspectResult inspect = ClimateCatchupQueue.inspect(level, pos);
+        ClimateSnowDiagnostics.ProfileResult profile = ClimateSnowDiagnostics.profile(level, pos);
+        ClimateTickrateCatchup.InspectResult inspect = ClimateTickrateCatchup.inspect(level, pos);
         String stamp = inspect.stamp()
-                .map(value -> "stampDay:" + value.dayTime() + "|elapsed:" + Math.max(0L, level.getDayTime() - value.dayTime()))
+                .map(value -> "lastAppliedGame:" + value.lastAppliedGameTime()
+                        + "|debt:" + Math.max(0L, level.getGameTime() - value.lastAppliedGameTime())
+                        + "|burstTicks:" + value.burstTicks())
                 .orElse("stamp:none");
         String last = inspect.lastResult()
                 .map(value -> "last:" + value.status()
-                        + "|snow:" + value.snow()
-                        + "|changed:" + value.changed()
-                        + "|ops:" + value.operations())
+                        + "|source:" + value.source()
+                        + "|multiplier:" + value.multiplier()
+                        + "|effectiveRTS:" + value.effectiveRandomTickSpeed())
                 .orElse("last:none");
         return pos.x + "," + pos.z
                 + "|loaded:" + profile.loaded()

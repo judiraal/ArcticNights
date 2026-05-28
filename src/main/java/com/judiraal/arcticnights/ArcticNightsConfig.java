@@ -32,22 +32,6 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.BooleanValue coldSweatClientDiagnostics;
     public static ModConfigSpec.BooleanValue fullMelting;
     public static ModConfigSpec.BooleanValue alternativeTornadoStrengthGrabbing;
-    public static ModConfigSpec.BooleanValue unloadedClimateCatchup;
-    public static ModConfigSpec.BooleanValue unloadedClimateCatchupDebug;
-    public static ModConfigSpec.BooleanValue catchupNewChunksFromWorldStart;
-    public static ModConfigSpec.IntValue maxCatchupTicks;
-    public static ModConfigSpec.IntValue minCatchupTicks;
-    public static ModConfigSpec.IntValue catchupSampleTicks;
-    public static ModConfigSpec.IntValue maxCatchupSamplesPerChunk;
-    public static ModConfigSpec.IntValue maxCatchupOperationsPerChunk;
-    public static ModConfigSpec.IntValue maxCatchupBlockChangesPerTick;
-    public static ModConfigSpec.IntValue maxCatchupJobsPerTick;
-    public static ModConfigSpec.IntValue maxCatchupOperationsPerChunkSlice;
-    public static ModConfigSpec.IntValue maxCatchupQueuedChunks;
-    public static ModConfigSpec.IntValue maxSnowLayersFromCatchup;
-    public static ModConfigSpec.BooleanValue catchupCanCreateFullSnowBlocks;
-    public static ModConfigSpec.BooleanValue catchupCanFreezeWater;
-    public static ModConfigSpec.BooleanValue catchupCanMeltIce;
     public static ModConfigSpec.BooleanValue tickrateClimateCatchup;
     public static ModConfigSpec.BooleanValue tickrateClimateCatchupDebug;
     public static ModConfigSpec.BooleanValue tickrateCatchupNewChunksUseRecentExposure;
@@ -59,11 +43,6 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.IntValue tickrateCatchupHistoryWindowTicks;
     public static ModConfigSpec.IntValue tickrateCatchupPrecipitationAttemptIntervalTicks;
     public static ModConfigSpec.IntValue tickrateCatchupMaxBurstChunksPerTick;
-    public static ModConfigSpec.IntValue tickrateCatchupMaxExtraClimateAttemptsPerTick;
-    public static ModConfigSpec.IntValue tickrateCatchupMaxExtraClimateAttemptsPerChunk;
-    public static ModConfigSpec.IntValue tickrateCatchupMaxSnowLayers;
-    public static ModConfigSpec.BooleanValue tickrateCatchupCanFreezeWater;
-    public static ModConfigSpec.BooleanValue tickrateCatchupCanMeltIce;
 
     private ArcticNightsConfig(final ModConfigSpec.Builder builder) {
         circumferenceBlockDistance = builder.comment("The distance in blocks for a full circumference, i.e. double the distance between two poles.")
@@ -113,44 +92,6 @@ public class ArcticNightsConfig {
         alternativeTornadoStrengthGrabbing = builder.comment("Enable alternative tornado strength grabbing, limiting debug output, optimizing performance and allowing more blocks to grab.")
                 .define("alternativeTornadoStrengthGrabbing", false);
 
-        builder.push("unloadedClimateCatchup");
-        unloadedClimateCatchup = builder.comment("Apply bounded snow, ice, freeze, and melt reconciliation when naturally loaded chunks return after being unloaded.",
-                        "This is not chunk ticking; it samples climate debt when the chunk loads again.")
-                .define("enabled", false);
-        unloadedClimateCatchupDebug = builder.comment("Enable detailed unloaded climate catch-up logs and debug command mutation paths.")
-                .define("debug", false);
-        catchupNewChunksFromWorldStart = builder.comment("Apply catch-up to freshly generated chunks as if their last climate stamp was world day-time 0.",
-                        "When disabled, fresh chunks are only stamped when first generated and do not receive historical snow or melt.")
-                .define("newChunksFromWorldStart", false);
-        maxCatchupTicks = builder.comment("Maximum climate day-time ticks a chunk may catch up from one reload.")
-                .defineInRange("maxTicks", 72_000, 1_200, 1_728_000);
-        minCatchupTicks = builder.comment("Minimum elapsed climate ticks before a normal chunk reload gets a catch-up job.")
-                .defineInRange("minTicks", 1_200, 0, 72_000);
-        catchupSampleTicks = builder.comment("Coarse sample interval used to approximate elapsed climate.")
-                .defineInRange("sampleTicks", 2_400, 200, 24_000);
-        maxCatchupSamplesPerChunk = builder.comment("Maximum climate samples per chunk catch-up job.")
-                .defineInRange("maxSamplesPerChunk", 32, 1, 512);
-        maxCatchupOperationsPerChunk = builder.comment("Maximum sampled surface operations per chunk catch-up job.")
-                .defineInRange("maxOperationsPerChunk", 96, 1, 4096);
-        maxCatchupBlockChangesPerTick = builder.comment("Global block-change budget for climate catch-up per server tick.")
-                .defineInRange("maxBlockChangesPerTick", 64, 1, 4096);
-        maxCatchupJobsPerTick = builder.comment("Maximum queued chunk catch-up slices processed per server tick.",
-                        "Higher values spread first snow coverage over newly explored areas before deepening individual chunks.")
-                .defineInRange("maxJobsPerTick", 8, 1, 128);
-        maxCatchupOperationsPerChunkSlice = builder.comment("Maximum sampled surface operations from one chunk catch-up job before it yields to neighboring chunks.")
-                .defineInRange("maxOperationsPerChunkSlice", 64, 1, 4096);
-        maxCatchupQueuedChunks = builder.comment("Maximum queued chunks waiting for climate catch-up. Overflowing jobs are skipped and timestamped.")
-                .defineInRange("maxQueuedChunks", 512, 1, 100_000);
-        maxSnowLayersFromCatchup = builder.comment("Maximum snow-layer height that unloaded catch-up may create.")
-                .defineInRange("maxSnowLayers", 4, 1, 8);
-        catchupCanCreateFullSnowBlocks = builder.comment("Allow catch-up to create full snow blocks. Kept off for the first slice.")
-                .define("canCreateFullSnowBlocks", false);
-        catchupCanFreezeWater = builder.comment("Allow catch-up to freeze exposed water when the sampled climate is cold enough.")
-                .define("canFreezeWater", true);
-        catchupCanMeltIce = builder.comment("Allow catch-up to melt vanilla snow and ice when the sampled climate thaws.")
-                .define("canMeltIce", true);
-        builder.pop();
-
         builder.push("tickrateClimateCatchup");
         tickrateClimateCatchup = builder.comment("Temporarily increase the random tick speed passed into vanilla per-chunk ticking when loaded chunks have missed climate ticks.",
                         "This V3 path hooks the normal chunk tick instead of running the V1 chunk-load replay queue or V2 side-loop climate mutations.")
@@ -177,16 +118,6 @@ public class ArcticNightsConfig {
                 .defineInRange("precipitationAttemptIntervalTicks", 48, 1, 24_000);
         tickrateCatchupMaxBurstChunksPerTick = builder.comment("Maximum ticking chunks allowed to receive an increased vanilla random tick speed per server tick.")
                 .defineInRange("maxBurstChunksPerTick", 32, 1, 512);
-        tickrateCatchupMaxExtraClimateAttemptsPerTick = builder.comment("Legacy V2 side-loop budget. Not used by the V3 vanilla chunk tick hook.")
-                .defineInRange("maxExtraClimateAttemptsPerTick", 512, 1, 100_000);
-        tickrateCatchupMaxExtraClimateAttemptsPerChunk = builder.comment("Legacy V2 side-loop per-chunk budget. Not used by the V3 vanilla chunk tick hook.")
-                .defineInRange("maxExtraClimateAttemptsPerChunk", 64, 1, 4096);
-        tickrateCatchupMaxSnowLayers = builder.comment("Legacy V2 side-loop snow cap. V3 relies on vanilla snow behavior.")
-                .defineInRange("maxSnowLayers", 7, 1, 7);
-        tickrateCatchupCanFreezeWater = builder.comment("Legacy V2 side-loop freeze toggle. V3 relies on vanilla random ticks.")
-                .define("canFreezeWater", true);
-        tickrateCatchupCanMeltIce = builder.comment("Legacy V2 side-loop melt toggle. V3 relies on vanilla random ticks.")
-                .define("canMeltIce", true);
         builder.pop();
         builder.build();
     }
