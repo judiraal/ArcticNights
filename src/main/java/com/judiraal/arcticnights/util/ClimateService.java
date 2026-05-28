@@ -540,7 +540,7 @@ public final class ClimateService {
         return (blockState.isAir()
                 || (blockState.is(Blocks.SNOW) && SnowAccumulation.canAccumulate(levelReader, pos, blockState))
                 || SeasonalGroundCover.canBeBuriedBySnow(blockState))
-                && Blocks.SNOW.defaultBlockState().canSurvive(levelReader, pos);
+                && SnowAccumulation.canWeatherPlaceAt(levelReader, pos);
     }
 
     public static boolean warmEnoughToRain(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {

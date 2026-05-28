@@ -111,7 +111,7 @@ public final class ClimateSnowDiagnostics {
             return SkipReason.NO_SNOW_SURFACE;
         }
 
-        if (!Blocks.SNOW.defaultBlockState().canSurvive(level, target)) {
+        if (!SnowAccumulation.canWeatherPlaceAt(level, target)) {
             return SkipReason.SNOW_CANNOT_SURVIVE;
         }
         if (!targetBiome.value().hasPrecipitation()) {
