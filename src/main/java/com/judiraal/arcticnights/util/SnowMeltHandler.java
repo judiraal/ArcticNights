@@ -137,7 +137,6 @@ public final class SnowMeltHandler {
     public static boolean shouldMeltAt(ServerLevel level, BlockPos pos, Season.SubSeason subSeason) {
         final Holder<Biome> biomeHolder = level.getBiome(pos);
         if (biomeHolder.is(Tags.Biomes.IS_CAVE)) return false;
-        if (biomeHolder.is(ModTags.Biomes.BLACKLISTED_BIOMES) && !biomeHolder.is(Biomes.RIVER)) return false;
 
         if (ArcticNightsFeatures.fullMeltingUsesClimate()) {
             ClimateSnapshot.SnowBehavior snowBehavior = ClimateService.snowBehaviorAt(level, biomeHolder, pos);
@@ -149,6 +148,8 @@ public final class SnowMeltHandler {
 
             return true;
         }
+
+        if (biomeHolder.is(ModTags.Biomes.BLACKLISTED_BIOMES) && !biomeHolder.is(Biomes.RIVER)) return false;
 
         final float temp = SeasonHooks.getBiomeTemperatureInSeason(subSeason, biomeHolder, pos);
         if (temp < -0.15F) return false;

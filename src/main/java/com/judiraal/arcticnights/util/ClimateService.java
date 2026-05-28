@@ -31,6 +31,7 @@ public final class ClimateService {
     private static final double DAILY_WEATHER_JITTER_C = 1.0D;
     private static final int STARTING_WEATHER_GRACE_DAYS = 5;
     private static final double STARTING_WEATHER_OFFSET_C = 5.0D;
+    private static final double SNOW_ACCUMULATION_TRANSITION_C = 4.0D;
     private static final int WEATHER_ANOMALY_TRANSITION_TICKS = 2_000;
     private static final float EQUATOR_WINTER_C = 24.0F;
     private static final float EQUATOR_SPRING_AUTUMN_C = 30.0F;
@@ -483,12 +484,12 @@ public final class ClimateService {
 
     public static Biome.Precipitation precipitationAtAsVanillaType(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
         if (!biome.value().hasPrecipitation()) return Biome.Precipitation.NONE;
-        if (!(levelReader instanceof Level level)) return biome.value().getPrecipitationAt(pos);
-        return switch (precipitationKind(biome, outdoorMinecraftTemperature(level, biome, pos, true))) {
-            case NONE -> Biome.Precipitation.NONE;
-            case RAIN -> Biome.Precipitation.RAIN;
-            case SNOW -> Biome.Precipitation.SNOW;
-        };
+        if (!(levelReader instanceof Level level)) {
+            return biome.value().getPrecipitationAt(pos);
+        }
+
+        float snowFactor = snowAccumulationFactor(outdoorMinecraftTemperature(level, biome, pos, true));
+        return snowFactorRoll(levelReader, pos, snowFactor) ? Biome.Precipitation.SNOW : Biome.Precipitation.RAIN;
     }
 
     public static boolean hasSnowPrecipitation(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
@@ -528,7 +529,7 @@ public final class ClimateService {
     }
 
     public static boolean shouldSnow(LevelReader levelReader, Holder<Biome> biome, BlockPos pos, float outdoorMinecraftTemperature) {
-        if (warmEnoughToRain(outdoorMinecraftTemperature)) return false;
+        if (!snowFactorRoll(levelReader, pos, snowAccumulationFactor(outdoorMinecraftTemperature))) return false;
         if (pos.getY() < levelReader.getMinBuildHeight()
                 || pos.getY() >= levelReader.getMaxBuildHeight()
                 || levelReader.getBrightness(LightLayer.BLOCK, pos) >= 10) {
@@ -548,6 +549,26 @@ public final class ClimateService {
 
     public static boolean warmEnoughToRain(float outdoorMinecraftTemperature) {
         return outdoorMinecraftTemperature >= SNOW_THRESHOLD;
+    }
+
+    public static float snowAccumulationFactor(float outdoorMinecraftTemperature) {
+        float halfWidth = celsiusOffsetToMinecraftTemperatureOffset(SNOW_ACCUMULATION_TRANSITION_C * 0.5D);
+        float coldEdge = SNOW_THRESHOLD - halfWidth;
+        float warmEdge = SNOW_THRESHOLD + halfWidth;
+        float factor = Mth.clamp((warmEdge - outdoorMinecraftTemperature) / (warmEdge - coldEdge), 0.0F, 1.0F);
+        return factor * factor * (3.0F - 2.0F * factor);
+    }
+
+    private static boolean snowFactorRoll(LevelReader levelReader, BlockPos pos, float factor) {
+        if (factor >= 1.0F) return true;
+        if (factor <= 0.0F) return false;
+
+        long bucket = levelReader instanceof Level level ? Math.floorDiv(level.getDayTime(), 600L) : 0L;
+        long hash = mix64((long) pos.getX() * 0x9E3779B97F4A7C15L
+                ^ (long) pos.getZ() * 0xBF58476D1CE4E5B9L
+                ^ bucket * 0xD6E8FEB86659FD93L);
+        double unit = (hash >>> 11) * 0x1.0p-53;
+        return unit < factor;
     }
 
     private static float outdoorMinecraftTemperatureForSnowTest(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {

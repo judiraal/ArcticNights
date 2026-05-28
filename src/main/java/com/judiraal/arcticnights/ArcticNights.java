@@ -5,7 +5,9 @@ import com.judiraal.arcticnights.compat.ConditionalSubscribers;
 import com.judiraal.arcticnights.util.ArcticSpawner;
 import com.judiraal.arcticnights.util.ClimateCatchupQueue;
 import com.judiraal.arcticnights.util.ClimateDebugWeatherNetworking;
+import com.judiraal.arcticnights.util.ClimatePlayerHarness;
 import com.judiraal.arcticnights.util.ClimateService;
+import com.judiraal.arcticnights.util.ClimateTickrateCatchup;
 import com.judiraal.arcticnights.util.ClimateVisualWeatherNetworking;
 import com.judiraal.arcticnights.util.UndeadSpawnDiagnostics;
 import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
@@ -69,6 +71,7 @@ public class ArcticNights {
     public ArcticNights(IEventBus modEventBus, ModContainer modContainer) {
         ConditionalSubscribers.inject(modContainer);
         modContainer.registerConfig(ModConfig.Type.COMMON, ArcticNightsConfig.SPEC);
+        ArcticNightsAttachments.register(modEventBus);
         modEventBus.addListener(ClimateDebugWeatherNetworking::registerPayloads);
         modEventBus.addListener(ClimateVisualWeatherNetworking::registerPayloads);
         ArcticNightsDensityFunctionTypes.TYPES.register(modEventBus);
@@ -76,8 +79,10 @@ public class ArcticNights {
 
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
+        ClimatePlayerHarness.onServerStopped(event);
         ClimateService.clearDebugWeatherOffset(event.getServer());
         ClimateCatchupQueue.onServerStopped(event);
+        ClimateTickrateCatchup.onServerStopped(event);
     }
 
     @SubscribeEvent
@@ -87,7 +92,9 @@ public class ArcticNights {
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
+        ClimatePlayerHarness.onServerTick(event);
         ClimateCatchupQueue.onServerTick(event);
+        ClimateTickrateCatchup.onServerTick(event);
     }
 
     @SubscribeEvent

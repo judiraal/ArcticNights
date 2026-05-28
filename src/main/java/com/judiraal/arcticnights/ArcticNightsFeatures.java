@@ -43,4 +43,12 @@ public final class ArcticNightsFeatures {
     public static boolean catchupNewChunksFromWorldStart() {
         return unloadedClimateCatchup() && ArcticNightsConfig.catchupNewChunksFromWorldStart.getAsBoolean();
     }
+
+    public static boolean tickrateClimateCatchup() {
+        return climateSystem() && ArcticNightsConfig.tickrateClimateCatchup.getAsBoolean();
+    }
+
+    public static boolean tickrateClimateCatchupDebug() {
+        return ArcticNightsConfig.tickrateClimateCatchupDebug.getAsBoolean();
+    }
 }

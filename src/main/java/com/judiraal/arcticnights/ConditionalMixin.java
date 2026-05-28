@@ -31,6 +31,7 @@ public class ConditionalMixin implements IMixinConfigPlugin {
             "com.judiraal.arcticnights.mixin.minecraft.NaturalSpawnerMixin",
             "com.judiraal.arcticnights.mixin.minecraft.NoiseBasedChunkGeneratorMixin",
             "com.judiraal.arcticnights.mixin.minecraft.ServerChunkCacheAccessor",
+            "com.judiraal.arcticnights.mixin.minecraft.ServerChunkCacheMixin",
             "com.judiraal.arcticnights.mixin.minecraft.ServerLevelMixin",
             VANILLA_SERVER_LEVEL_PRECIPITATION_MIXIN,
             "com.judiraal.arcticnights.mixin.minecraft.SnowLayerBlockMixin",

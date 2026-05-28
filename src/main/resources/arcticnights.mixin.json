@@ -20,6 +20,7 @@
     "minecraft.NaturalSpawnerMixin",
     "minecraft.NoiseBasedChunkGeneratorMixin",
     "minecraft.ServerChunkCacheAccessor",
+    "minecraft.ServerChunkCacheMixin",
     "minecraft.ServerLevelMixin",
     "minecraft.VanillaServerLevelPrecipitationMixin",
     "minecraft.SpreadingSnowyDirtBlockMixin",

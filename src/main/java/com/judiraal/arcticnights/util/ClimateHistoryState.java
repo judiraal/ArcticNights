@@ -80,16 +80,24 @@ final class ClimateHistoryState extends SavedData {
     }
 
     boolean hasPrecipitationBetween(long fromDayTime, long toDayTime) {
+        return precipitationTicksBetween(fromDayTime, toDayTime) > 0L;
+    }
+
+    long precipitationTicksBetween(long fromDayTime, long toDayTime) {
         long from = Math.min(fromDayTime, toDayTime);
         long to = Math.max(fromDayTime, toDayTime);
+        long ticks = 0L;
         Iterator<WeatherSpan> iterator = weatherSpans.descendingIterator();
         while (iterator.hasNext()) {
             WeatherSpan span = iterator.next();
             if (span.endDayTime() < from) break;
             if (span.startDayTime() > to) continue;
-            if (isPrecipitating(span.state())) return true;
+            if (!isPrecipitating(span.state())) continue;
+            long overlapStart = Math.max(from, span.startDayTime());
+            long overlapEnd = Math.min(to, span.endDayTime());
+            ticks += Math.max(0L, overlapEnd - overlapStart);
         }
-        return false;
+        return ticks;
     }
 
     String debugWindow(long fromDayTime, long toDayTime) {
@@ -113,6 +121,7 @@ final class ClimateHistoryState extends SavedData {
                 + ", window=" + from + ".." + to
                 + ", overlap=" + overlaps
                 + ", precip=" + precipitating
+                + ", precipTicks=" + precipitationTicksBetween(from, to)
                 + ", atEnd=" + atEnd.state().name() + (atEnd.recorded() ? "/recorded" : "/synthetic")
                 + ", first=" + spanSummary(first)
                 + ", last=" + spanSummary(last);
