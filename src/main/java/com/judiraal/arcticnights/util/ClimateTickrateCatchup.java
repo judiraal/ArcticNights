@@ -60,6 +60,7 @@ public final class ClimateTickrateCatchup {
         runtime.beginTick(level.getGameTime());
         TickPlan plan = plan(level, chunk, Math.max(0, baseRandomTickSpeed), runtime);
         level.tickChunk(chunk, plan.result().effectiveRandomTickSpeed());
+        MachineCatchupBridge.tickSupportedBlockEntities(level, chunk, plan.result());
         applyPlan(chunk, plan);
         TickResult result = plan.result();
         if (!"normal".equals(result.status())) {
