@@ -8,8 +8,8 @@ public final class ArcticNightsFeatures {
         return ArcticNightsConfig.climateSystem.getAsBoolean();
     }
 
-    public static boolean debugCommands() {
-        return ArcticNightsConfig.debugCommands.getAsBoolean();
+    public static boolean climateMaintenanceCommands() {
+        return ArcticNightsConfig.climateMaintenanceCommands.getAsBoolean();
     }
 
     public static boolean spawnDiagnostics() {
@@ -36,7 +36,7 @@ public final class ArcticNightsFeatures {
         return climateSystem() && ArcticNightsConfig.tickrateClimateCatchup.getAsBoolean();
     }
 
-    public static boolean tickrateClimateCatchupDebug() {
-        return ArcticNightsConfig.tickrateClimateCatchupDebug.getAsBoolean();
+    public static boolean tickrateClimateCatchupDiagnostics() {
+        return ArcticNightsConfig.tickrateCatchupDiagnostics.getAsBoolean();
     }
 }

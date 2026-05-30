@@ -231,7 +231,7 @@ public final class ClimateTickrateCatchup {
     }
 
     private static void debugResult(ServerLevel level, TickResult result, RuntimeState runtime) {
-        if (!ArcticNightsFeatures.tickrateClimateCatchupDebug()) return;
+        if (!ArcticNightsFeatures.tickrateClimateCatchupDiagnostics()) return;
         boolean notable = result.burstTicks() <= 1
                 || result.burstTicks() % 20 == 0
                 || !"burst".equals(result.status());

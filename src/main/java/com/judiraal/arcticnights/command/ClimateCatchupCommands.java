@@ -28,7 +28,7 @@ public final class ClimateCatchupCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("arcticnights")
-                .requires(source -> source.hasPermission(2) && ArcticNightsFeatures.debugCommands())
+                .requires(source -> source.hasPermission(2) && ArcticNightsFeatures.climateMaintenanceCommands())
                 .then(Commands.literal("climate")
                         .then(Commands.literal("harness")
                                 .then(Commands.literal("start")
@@ -75,11 +75,6 @@ public final class ClimateCatchupCommands {
     }
 
     private static int startHarness(CommandContext<CommandSourceStack> context, BlockPos origin, String directionName, int travelChunks, int waitSeconds) {
-        if (!ArcticNightsFeatures.tickrateClimateCatchupDebug()) {
-            context.getSource().sendFailure(Component.literal("Set tickrateClimateCatchup.debug=true to allow the climate player harness."));
-            return 0;
-        }
-
         ServerLevel level = context.getSource().getLevel();
         ClimatePlayerHarness.Direction direction = ClimatePlayerHarness.Direction.parse(directionName)
                 .orElse(null);
@@ -213,11 +208,6 @@ public final class ClimateCatchupCommands {
     }
 
     private static int tickrateReset(CommandContext<CommandSourceStack> context, BlockPos blockPos, int radius) {
-        if (!ArcticNightsFeatures.tickrateClimateCatchupDebug()) {
-            context.getSource().sendFailure(Component.literal("Set tickrateClimateCatchup.debug=true to allow tick-rate catch-up reset commands."));
-            return 0;
-        }
-
         ServerLevel level = context.getSource().getLevel();
         ChunkPos chunkPos = new ChunkPos(blockPos);
         int reset = ClimateTickrateCatchup.reset(level, chunkPos, radius);
