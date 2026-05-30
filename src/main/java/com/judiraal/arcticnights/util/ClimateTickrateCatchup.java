@@ -11,6 +11,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
@@ -22,6 +23,7 @@ import java.util.WeakHashMap;
 public final class ClimateTickrateCatchup {
     private static final int RECENT_RESULTS = 128;
     private static final int HISTORY_SAVE_INTERVAL_TICKS = 20;
+    private static final String SOURCE_STAMP_ELAPSED = "stamp_elapsed";
     private static final Map<ServerLevel, RuntimeState> RUNTIME = new WeakHashMap<>();
 
     private ClimateTickrateCatchup() {
@@ -58,12 +60,8 @@ public final class ClimateTickrateCatchup {
 
         RuntimeState runtime = runtime(level);
         runtime.beginTick(level.getGameTime());
-        TickPlan plan = plan(level, chunk, Math.max(0, baseRandomTickSpeed), runtime);
-        level.tickChunk(chunk, plan.result().effectiveRandomTickSpeed());
-        MachineCatchupBridge.tickSupportedBlockEntities(level, chunk, plan.result());
-        applyPlan(chunk, plan);
-        TickResult result = plan.result();
-        if (!"normal".equals(result.status())) {
+        TickResult result = tickWithCatchupPlan(level, chunk, Math.max(0, baseRandomTickSpeed), runtime);
+        if (result != null) {
             recordResult(runtime, result);
             debugResult(level, result, runtime);
         }
@@ -103,51 +101,63 @@ public final class ClimateTickrateCatchup {
         return reset;
     }
 
-    private static TickPlan plan(ServerLevel level, LevelChunk chunk, int baseRandomTickSpeed, RuntimeState runtime) {
+    private static TickResult tickWithCatchupPlan(ServerLevel level, LevelChunk chunk, int baseRandomTickSpeed, RuntimeState runtime) {
         ChunkPos pos = chunk.getPos();
         long gameTime = level.getGameTime();
         long dayTime = level.getDayTime();
         int threshold = ArcticNightsConfig.tickrateCatchupDebtThresholdTicks.get();
-        ClimateTickrateChunkStamp stamp = stamp(chunk).orElse(null);
-        boolean newStamp = stamp == null;
-        DebtSeed debtSeed = DebtSeed.existing();
+        AttachmentType<ClimateTickrateChunkStamp> attachmentType = ArcticNightsAttachments.TICKRATE_CATCHUP.get();
+        boolean newStamp = !chunk.hasData(attachmentType);
+        ClimateTickrateChunkStamp stamp;
+        DebtSeed debtSeed = null;
+        String source = SOURCE_STAMP_ELAPSED;
         if (newStamp) {
             debtSeed = newChunkDebtSeed(level, gameTime, dayTime);
             long lastApplied = Math.max(0L, gameTime - debtSeed.debtTicks());
             stamp = new ClimateTickrateChunkStamp(lastApplied, gameTime, 0);
+            source = debtSeed.source();
+        } else {
+            stamp = chunk.getData(attachmentType);
         }
 
         long lastApplied = stamp.lastAppliedGameTime();
         if (gameTime < lastApplied) {
             TickResult result = TickResult.reset(pos, "time_rewind", baseRandomTickSpeed);
-            return new TickPlan(stamp, gameTime, gameTime, 0, true, result);
+            level.tickChunk(chunk, baseRandomTickSpeed);
+            applyPlan(chunk, stamp, gameTime, gameTime, 0);
+            return result;
         }
 
         long debt = Math.min(gameTime - lastApplied, ArcticNightsConfig.tickrateCatchupMaxDebtTicks.get());
         if (debt <= threshold) {
             boolean shouldPersist = newStamp || debt >= Math.max(1, threshold);
-            long appliedTicks = baseRandomTickSpeed > 0 ? 1L : 0L;
-            TickResult result = TickResult.normal(pos, debt, baseRandomTickSpeed, appliedTicks, debtSeed.source());
-            long markedApplied = shouldPersist ? gameTime : stamp.lastAppliedGameTime();
-            long markedSeen = shouldPersist ? gameTime : stamp.lastSeenGameTime();
-            int markedBurstTicks = shouldPersist ? 0 : stamp.burstTicks();
-            return new TickPlan(stamp, markedApplied, markedSeen, markedBurstTicks, shouldPersist, result);
+            level.tickChunk(chunk, baseRandomTickSpeed);
+            if (shouldPersist) {
+                applyPlan(chunk, stamp, gameTime, gameTime, 0);
+            }
+            return null;
         }
 
         if (stamp.burstTicks() >= ArcticNightsConfig.tickrateCatchupMaxBurstTicks.get()) {
-            TickResult result = TickResult.skipped(pos, "max_duration", debt, baseRandomTickSpeed, 0L, debtSeed.source());
-            return new TickPlan(stamp, gameTime, gameTime, 0, true, result);
+            TickResult result = TickResult.skipped(pos, "max_duration", debt, baseRandomTickSpeed, 0L, source);
+            level.tickChunk(chunk, baseRandomTickSpeed);
+            applyPlan(chunk, stamp, gameTime, gameTime, 0);
+            return result;
         }
 
         if (baseRandomTickSpeed <= 0) {
-            TickResult result = TickResult.skipped(pos, "random_tick_disabled", debt, baseRandomTickSpeed, 0L, debtSeed.source());
-            return new TickPlan(stamp, lastApplied, gameTime, stamp.burstTicks(), true, result);
+            TickResult result = TickResult.skipped(pos, "random_tick_disabled", debt, baseRandomTickSpeed, 0L, source);
+            level.tickChunk(chunk, baseRandomTickSpeed);
+            applyPlan(chunk, stamp, lastApplied, gameTime, stamp.burstTicks());
+            return result;
         }
 
         if (!runtime.claimBurstChunk()) {
             long newLastApplied = Math.min(gameTime, lastApplied + 1L);
-            TickResult result = TickResult.skipped(pos, "budget", debt, baseRandomTickSpeed, 1L, debtSeed.source());
-            return new TickPlan(stamp, newLastApplied, gameTime, stamp.burstTicks(), true, result);
+            TickResult result = TickResult.skipped(pos, "budget", debt, baseRandomTickSpeed, 1L, source);
+            level.tickChunk(chunk, baseRandomTickSpeed);
+            applyPlan(chunk, stamp, newLastApplied, gameTime, stamp.burstTicks());
+            return result;
         }
 
         int multiplier = multiplier(debt);
@@ -159,16 +169,20 @@ public final class ClimateTickrateCatchup {
             newLastApplied = gameTime;
             burstTicks = 0;
         }
-        Exposure exposure = debtSeed.exposure().orElseGet(() -> exposure(ClimateHistoryState.get(level), dayTime, debt));
+        Exposure exposure = debtSeed != null && debtSeed.exposure() != null
+                ? debtSeed.exposure()
+                : exposure(ClimateHistoryState.get(level), dayTime, debt);
         TickResult result = TickResult.burst(pos, debt, multiplier, baseRandomTickSpeed, effectiveRandomTickSpeed,
-                appliedTicks, burstTicks, exposure, debtSeed.source());
-        return new TickPlan(stamp, newLastApplied, gameTime, burstTicks, true, result);
+                appliedTicks, burstTicks, exposure, source);
+        level.tickChunk(chunk, effectiveRandomTickSpeed);
+        MachineCatchupBridge.tickSupportedBlockEntities(level, chunk, result);
+        applyPlan(chunk, stamp, newLastApplied, gameTime, burstTicks);
+        return result;
     }
 
-    private static void applyPlan(LevelChunk chunk, TickPlan plan) {
-        if (!plan.persist()) return;
-        plan.stamp().mark(plan.lastAppliedGameTime(), plan.lastSeenGameTime(), plan.burstTicks());
-        chunk.setData(ArcticNightsAttachments.TICKRATE_CATCHUP.get(), plan.stamp());
+    private static void applyPlan(LevelChunk chunk, ClimateTickrateChunkStamp stamp, long lastAppliedGameTime, long lastSeenGameTime, int burstTicks) {
+        stamp.mark(lastAppliedGameTime, lastSeenGameTime, burstTicks);
+        chunk.setData(ArcticNightsAttachments.TICKRATE_CATCHUP.get(), stamp);
         chunk.setUnsaved(true);
     }
 
@@ -211,7 +225,7 @@ public final class ClimateTickrateCatchup {
         long precipitationTicks = ClimateHistoryState.get(level).precipitationTicksBetween(fromDayTime, dayTime);
         long debt = Math.min(precipitationTicks, ArcticNightsConfig.tickrateCatchupMaxDebtTicks.get());
         double fraction = Mth.clamp(precipitationTicks / (double) window, 0.0D, 1.0D);
-        return new DebtSeed("new_precip_history", debt, Optional.of(new Exposure(window, precipitationTicks, fraction)));
+        return new DebtSeed("new_precip_history", debt, new Exposure(window, precipitationTicks, fraction));
     }
 
     private static Exposure exposure(ClimateHistoryState history, long dayTime, long debt) {
@@ -280,26 +294,12 @@ public final class ClimateTickrateCatchup {
         }
     }
 
-    private record TickPlan(
-            ClimateTickrateChunkStamp stamp,
-            long lastAppliedGameTime,
-            long lastSeenGameTime,
-            int burstTicks,
-            boolean persist,
-            TickResult result
-    ) {
-    }
-
     private record Exposure(long historyWindowTicks, long precipitationTicks, double precipitationFraction) {
     }
 
-    private record DebtSeed(String source, long debtTicks, Optional<Exposure> exposure) {
-        private static DebtSeed existing() {
-            return new DebtSeed("stamp_elapsed", 0L, Optional.empty());
-        }
-
+    private record DebtSeed(String source, long debtTicks, Exposure exposure) {
         private static DebtSeed zero(String source) {
-            return new DebtSeed(source, 0L, Optional.of(new Exposure(0L, 0L, 0.0D)));
+            return new DebtSeed(source, 0L, new Exposure(0L, 0L, 0.0D));
         }
     }
 

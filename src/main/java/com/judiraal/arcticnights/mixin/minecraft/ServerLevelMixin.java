@@ -2,15 +2,21 @@ package com.judiraal.arcticnights.mixin.minecraft;
 
 import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.ClimateService;
+import com.judiraal.arcticnights.util.SeasonalGroundCover;
 import com.judiraal.arcticnights.util.SnowAccumulation;
+import com.judiraal.arcticnights.util.UnderTreeSnow;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerLevel.class)
 public class ServerLevelMixin {
@@ -36,6 +42,22 @@ public class ServerLevelMixin {
         if (!ArcticNightsFeatures.climateSystem()) return biome.shouldSnow(levelReader, pos);
         ServerLevel level = (ServerLevel) (Object) this;
         return ClimateService.shouldSnow(level, level.getBiome(pos), pos);
+    }
+
+    @Redirect(method = "tickPrecipitation",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;setBlockAndUpdate(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z", ordinal = 2))
+    private boolean arcticnights$placeSnowOverBuryableVegetation(ServerLevel level, BlockPos pos, BlockState state) {
+        if (ArcticNightsFeatures.climateSystem() && SeasonalGroundCover.canBeBuriedBySnow(level.getBlockState(pos))) {
+            return level.setBlock(pos, state, Block.UPDATE_ALL);
+        }
+        return level.setBlockAndUpdate(pos, state);
+    }
+
+    @Inject(method = "tickPrecipitation", at = @At("TAIL"))
+    private void arcticnights$placeSnowUnderTrees(BlockPos blockPos, CallbackInfo ci) {
+        if (!ArcticNightsFeatures.climateSystem()) return;
+        ServerLevel level = (ServerLevel) (Object) this;
+        UnderTreeSnow.tryPlace(level, blockPos);
     }
 
 }
