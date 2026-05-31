@@ -115,6 +115,7 @@ public final class ClimatePlayerHarness {
         String stamp = inspect.stamp()
                 .map(value -> "lastAppliedGame:" + value.lastAppliedGameTime()
                         + "|debt:" + Math.max(0L, level.getGameTime() - value.lastAppliedGameTime())
+                        + "|lastBurstGame:" + value.lastBurstGameTime()
                         + "|burstTicks:" + value.burstTicks())
                 .orElse("stamp:none");
         String last = inspect.lastResult()
