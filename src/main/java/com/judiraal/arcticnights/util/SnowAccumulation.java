@@ -8,7 +8,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 public final class SnowAccumulation {
     private static final int MAX_ACCUMULATED_LAYERS = 7;
@@ -75,7 +74,7 @@ public final class SnowAccumulation {
 
         for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
             for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-                if (level.getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) return false;
+                if (!level.hasChunk(chunkX, chunkZ)) return false;
             }
         }
 

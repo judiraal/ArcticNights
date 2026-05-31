@@ -1,12 +1,13 @@
 package com.judiraal.arcticnights.mixin.minecraft;
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.gen.Invoker;
+import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(ChunkMap.class)
 public interface ChunkMapAccessor {
-    @Invoker("getChunks")
-    Iterable<ChunkHolder> arcticnights$getChunks();
+    @Accessor("visibleChunkMap")
+    Long2ObjectLinkedOpenHashMap<ChunkHolder> arcticnights$visibleChunkMap();
 }

@@ -14,6 +14,7 @@ public class ConditionalMixin implements IMixinConfigPlugin {
     private static final String VANILLA_SERVER_LEVEL_PRECIPITATION_MIXIN =
             "com.judiraal.arcticnights.mixin.minecraft.VanillaServerLevelPrecipitationMixin";
     private static final Set<String> BASE_MIXINS = Set.of(
+            "com.judiraal.arcticnights.mixin.minecraft.BiomeManagerAccessor",
             "com.judiraal.arcticnights.mixin.minecraft.ChunkStatusTasksMixin",
             "com.judiraal.arcticnights.mixin.minecraft.ChunkMapAccessor",
             "com.judiraal.arcticnights.mixin.minecraft.ChunkGeneratorMixin",
@@ -25,6 +26,7 @@ public class ConditionalMixin implements IMixinConfigPlugin {
             "com.judiraal.arcticnights.mixin.minecraft.IceBlockMixin",
             "com.judiraal.arcticnights.mixin.minecraft.ItemPropertiesMixin",
             "com.judiraal.arcticnights.mixin.minecraft.LevelChunkMixin",
+            "com.judiraal.arcticnights.mixin.minecraft.LevelRandomAccessor",
             "com.judiraal.arcticnights.mixin.minecraft.LevelMixin",
             "com.judiraal.arcticnights.mixin.minecraft.LevelRendererMixin",
             "com.judiraal.arcticnights.mixin.minecraft.LocalMobCapCalculatorMixin",

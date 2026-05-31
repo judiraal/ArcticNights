@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "plugin": "com.judiraal.arcticnights.ConditionalMixin",
   "mixins": [
+    "minecraft.BiomeManagerAccessor",
     "iris.CelestialUniformsMixin",
     "iris.PackDirectivesMixin",
     "iris.ShadowRendererMixin",
@@ -16,6 +17,7 @@
     "minecraft.FrostedIceBlockMixin",
     "minecraft.IceBlockMixin",
     "minecraft.LevelChunkMixin",
+    "minecraft.LevelRandomAccessor",
     "minecraft.LocalMobCapCalculatorMixin",
     "minecraft.NaturalSpawnerMixin",
     "minecraft.NoiseBasedChunkGeneratorMixin",
