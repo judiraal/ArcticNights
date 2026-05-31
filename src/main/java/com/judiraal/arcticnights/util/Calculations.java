@@ -76,16 +76,20 @@ public class Calculations {
      * @return float between 1 (summer) and -1 (winter)
       */
     public static float seasonalFactor(Level level) {
+        return seasonalFactor(level, level.getDayTime());
+    }
+
+    public static float seasonalFactor(Level level, long dayTime) {
         if (!ArcticNights.appliesTo(level)) return 0.0F;
         int daysPerSeason = ArcticNightsConfig.daysPerSeason.get();
         if (daysPerSeason == 0) return 0.0F;
 
         int day;
         if (ArcticNights.SERENE_SEASONS) {
-            day = SereneSeasonsCompat.HOLDER.getDay(level);
+            day = SereneSeasonsCompat.HOLDER.getDay(level, dayTime);
         } else {
             int daysPerYear = daysPerSeason << 2;
-            day = (int)((level.getDayTime() / 24000) * 96 / daysPerYear);
+            day = (int)((Math.max(0L, dayTime) / 24000L) * 96L / daysPerYear);
         }
         return Mth.cos((float)(day - 32) / 48 * Mth.PI);
     }
@@ -120,18 +124,24 @@ public class Calculations {
         private final WeakHashMap<Level, SeasonDayCache> dayCache = new WeakHashMap<>();
 
         int getDay(Level level) {
+            return getDay(level, level.getDayTime());
+        }
+
+        int getDay(Level level, long dayTime) {
             long gameTime = level.getGameTime();
-            long dayTime = level.getDayTime();
+            long currentDayTime = level.getDayTime();
             synchronized (this.dayCache) {
                 SeasonDayCache cache = this.dayCache.get(level);
                 if (cache == null) {
                     cache = new SeasonDayCache();
                     this.dayCache.put(level, cache);
                 }
-                if (cache.isExpired(gameTime, dayTime)) {
-                    cache.update(level, gameTime, dayTime);
+                if (cache.isExpired(gameTime, currentDayTime)) {
+                    cache.update(level, gameTime, currentDayTime);
                 }
-                return cache.day;
+                long tickOffset = dayTime - cache.cachedDayTime;
+                long seasonCycleTicks = Math.floorMod(cache.seasonCycleTicks + tickOffset, cache.cycleDuration);
+                return (int) (seasonCycleTicks / cache.dayDuration);
             }
         }
 
@@ -139,7 +149,9 @@ public class Calculations {
             private long expireGameTime = Long.MIN_VALUE;
             private long cachedDayTime = Long.MIN_VALUE;
             private long expireDayTime = Long.MIN_VALUE;
-            private int day;
+            private int dayDuration = 1;
+            private int cycleDuration = 1;
+            private int seasonCycleTicks;
 
             boolean isExpired(long gameTime, long dayTime) {
                 return gameTime >= this.expireGameTime
@@ -150,9 +162,13 @@ public class Calculations {
             void update(Level level, long gameTime, long dayTime) {
                 ISeasonState state = sereneseasons.api.season.SeasonHelper.getSeasonState(level);
                 int dayDuration = Math.max(1, state.getDayDuration());
-                long ticksUntilNextSeasonDay = dayDuration - Math.floorMod(state.getSeasonCycleTicks(), dayDuration);
+                int cycleDuration = Math.max(dayDuration, state.getCycleDuration());
+                int seasonCycleTicks = Math.floorMod(state.getSeasonCycleTicks(), cycleDuration);
+                long ticksUntilNextSeasonDay = dayDuration - Math.floorMod(seasonCycleTicks, dayDuration);
 
-                this.day = state.getDay();
+                this.dayDuration = dayDuration;
+                this.cycleDuration = cycleDuration;
+                this.seasonCycleTicks = seasonCycleTicks;
                 this.cachedDayTime = dayTime;
                 this.expireDayTime = dayTime + ticksUntilNextSeasonDay;
                 this.expireGameTime = gameTime + Math.min(ticksUntilNextSeasonDay, MAX_CACHE_TICKS);

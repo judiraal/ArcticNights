@@ -84,6 +84,15 @@ public final class ClimateTickrateChunkStamp implements INBTSerializable<Compoun
         return ticks;
     }
 
+    public long pendingReplayTicks(ReplayAction action) {
+        if (action == ReplayAction.NONE) return 0L;
+        long ticks = 0L;
+        for (ReplaySegment segment : pendingReplaySegments) {
+            if (segment.action() == action) ticks += segment.ticks();
+        }
+        return ticks;
+    }
+
     public int pendingReplaySegments() {
         return pendingReplaySegments.size();
     }

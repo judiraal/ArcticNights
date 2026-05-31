@@ -92,7 +92,7 @@ public final class ClimateService {
     }
 
     public static ClimateSnapshot sampleSnapshot(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, long dayTime) {
-        return snapshot(level, biome, pos, exposedToSky, weatherState, null, dayTime);
+        return snapshot(level, biome, pos, exposedToSky, weatherState, Calculations.seasonalFactor(level, dayTime), dayTime);
     }
 
     private static ClimateSnapshot snapshot(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {

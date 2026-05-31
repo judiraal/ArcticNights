@@ -165,7 +165,7 @@ public final class SnowMeltHandler {
         if (biomeHolder.is(Tags.Biomes.IS_CAVE)) return false;
 
         if (ArcticNightsFeatures.fullMeltingUsesClimate()) {
-            ClimateSnapshot.SnowBehavior snowBehavior = ClimateTickrateCatchup.isReplayingHistoricalMelt(level)
+            ClimateSnapshot.SnowBehavior snowBehavior = ClimateTickrateCatchup.isReplayingHistoricalClimate(level)
                     ? ClimateTickrateCatchup.historicalSnowBehavior(level, biomeHolder, pos, true)
                     : ClimateService.snowBehaviorAt(level, biomeHolder, pos);
             if (snowBehavior == ClimateSnapshot.SnowBehavior.PERSISTENT) return false;
