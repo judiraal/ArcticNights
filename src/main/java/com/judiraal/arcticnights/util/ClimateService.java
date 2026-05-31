@@ -488,7 +488,12 @@ public final class ClimateService {
             return biome.value().getPrecipitationAt(pos);
         }
 
-        float snowFactor = snowAccumulationFactor(outdoorMinecraftTemperature(level, biome, pos, true));
+        return precipitationAtAsVanillaType(levelReader, biome, pos, outdoorMinecraftTemperature(level, biome, pos, true));
+    }
+
+    public static Biome.Precipitation precipitationAtAsVanillaType(LevelReader levelReader, Holder<Biome> biome, BlockPos pos, float outdoorMinecraftTemperature) {
+        if (!biome.value().hasPrecipitation()) return Biome.Precipitation.NONE;
+        float snowFactor = snowAccumulationFactor(outdoorMinecraftTemperature);
         return snowFactorRoll(levelReader, pos, snowFactor) ? Biome.Precipitation.SNOW : Biome.Precipitation.RAIN;
     }
 

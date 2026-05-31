@@ -2,6 +2,7 @@ package com.judiraal.arcticnights.mixin.minecraft;
 
 import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.ClimateService;
+import com.judiraal.arcticnights.util.ClimateTickrateCatchup;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.biome.Biome;
@@ -16,6 +17,11 @@ public class VanillaServerLevelPrecipitationMixin {
     private Biome.Precipitation arcticnights$precipitationAt(Biome biome, BlockPos pos) {
         if (!ArcticNightsFeatures.climateSystem()) return biome.getPrecipitationAt(pos);
         ServerLevel level = (ServerLevel) (Object) this;
-        return ClimateService.precipitationAtAsVanillaType(level, level.getBiome(pos), pos);
+        var biomeHolder = level.getBiome(pos);
+        if (ClimateTickrateCatchup.isReplayingHistoricalPrecipitation(level)) {
+            float outdoorTemperature = ClimateTickrateCatchup.historicalOutdoorMinecraftTemperature(level, biomeHolder, pos, true);
+            return ClimateService.precipitationAtAsVanillaType(level, biomeHolder, pos, outdoorTemperature);
+        }
+        return ClimateService.precipitationAtAsVanillaType(level, biomeHolder, pos);
     }
 }

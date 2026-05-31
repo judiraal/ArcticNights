@@ -15,13 +15,20 @@ public final class UnderTreeSnow {
     }
 
     public static boolean tryPlace(ServerLevel level, BlockPos precipitationSample) {
-        if (!level.isRaining()) return false;
+        boolean historicalPrecipitation = ClimateTickrateCatchup.isReplayingHistoricalPrecipitation(level);
+        if (!level.isRaining() && !historicalPrecipitation) return false;
 
         BlockPos canopySurface = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, precipitationSample);
         if (!level.getBlockState(canopySurface.below()).is(BlockTags.LEAVES)) return false;
 
         BlockPos snowPos = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, precipitationSample);
-        if (!ClimateService.shouldSnow(level, level.getBiome(snowPos), snowPos)) return false;
+        var biome = level.getBiome(snowPos);
+        if (historicalPrecipitation) {
+            float outdoorTemperature = ClimateTickrateCatchup.historicalOutdoorMinecraftTemperature(level, biome, snowPos, true);
+            if (!ClimateService.shouldSnow(level, biome, snowPos, outdoorTemperature)) return false;
+        } else if (!ClimateService.shouldSnow(level, biome, snowPos)) {
+            return false;
+        }
 
         int configuredHeight = level.getGameRules().getInt(GameRules.RULE_SNOW_ACCUMULATION_HEIGHT);
         int maxLayers = SnowAccumulation.weatherAccumulationHeight(configuredHeight);

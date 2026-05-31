@@ -2,6 +2,7 @@ package com.judiraal.arcticnights.mixin.minecraft;
 
 import com.judiraal.arcticnights.ArcticNightsFeatures;
 import com.judiraal.arcticnights.util.ClimateService;
+import com.judiraal.arcticnights.util.ClimateTickrateCatchup;
 import com.judiraal.arcticnights.util.SeasonalGroundCover;
 import com.judiraal.arcticnights.util.SnowAccumulation;
 import com.judiraal.arcticnights.util.UnderTreeSnow;
@@ -33,7 +34,8 @@ public class ServerLevelMixin {
     private boolean arcticnights$shouldFreeze(Biome biome, LevelReader levelReader, BlockPos pos) {
         if (!ArcticNightsFeatures.climateSystem()) return biome.shouldFreeze(levelReader, pos);
         ServerLevel level = (ServerLevel) (Object) this;
-        return ClimateService.shouldFreeze(level, level.getBiome(pos), pos);
+        var biomeHolder = level.getBiome(pos);
+        return ClimateService.shouldFreeze(level, biomeHolder, pos);
     }
 
     @Redirect(method = "tickPrecipitation",
@@ -41,7 +43,18 @@ public class ServerLevelMixin {
     private boolean arcticnights$shouldSnow(Biome biome, LevelReader levelReader, BlockPos pos) {
         if (!ArcticNightsFeatures.climateSystem()) return biome.shouldSnow(levelReader, pos);
         ServerLevel level = (ServerLevel) (Object) this;
-        return ClimateService.shouldSnow(level, level.getBiome(pos), pos);
+        var biomeHolder = level.getBiome(pos);
+        if (ClimateTickrateCatchup.isReplayingHistoricalPrecipitation(level)) {
+            float outdoorTemperature = ClimateTickrateCatchup.historicalOutdoorMinecraftTemperature(level, biomeHolder, pos, true);
+            return ClimateService.shouldSnow(level, biomeHolder, pos, outdoorTemperature);
+        }
+        return ClimateService.shouldSnow(level, biomeHolder, pos);
+    }
+
+    @Redirect(method = "tickPrecipitation",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;isRaining()Z"))
+    private boolean arcticnights$historicalCatchupRain(ServerLevel level) {
+        return level.isRaining() || ClimateTickrateCatchup.isReplayingHistoricalPrecipitation(level);
     }
 
     @Redirect(method = "tickPrecipitation",

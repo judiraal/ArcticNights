@@ -104,7 +104,7 @@ public class ArcticNightsConfig {
                         "This V3 path hooks the normal chunk tick instead of running the V1 chunk-load replay queue or V2 side-loop climate mutations.")
                 .define("enabled", false);
         tickrateCatchupNewChunksUseRecentExposure = builder.comment("Treat chunks without a tick-rate stamp as having recent precipitation debt.",
-                        "Use only in controlled playtests; freshly generated chunks use recorded rain/snow ticks, not total elapsed game time.")
+                        "Use only in controlled playtests; freshly generated chunks derive local snow debt from recorded global weather history.")
                 .define("newChunksUseRecentExposure", false);
         tickrateCatchupDebtThresholdTicks = builder.comment("Ignore per-chunk climate debt at or below this many game ticks.")
                 .defineInRange("debtThresholdTicks", 20, 0, 20_000);
@@ -114,15 +114,17 @@ public class ArcticNightsConfig {
                 .defineInRange("maxMultiplier", 100, 1, 300);
         tickrateCatchupMaxBurstTicks = builder.comment("Maximum consecutive server ticks one chunk may spend in a catch-up burst before residual debt is discarded.")
                 .defineInRange("maxBurstTicks", 100, 1, 20_000);
-        tickrateCatchupMaxDebtTicks = builder.comment("Maximum missed game ticks considered by the tick-rate catch-up path.")
+        tickrateCatchupMaxDebtTicks = builder.comment("Maximum actionable local snow/melt replay ticks the tick-rate catch-up path will repay.",
+                        "Neutral weather-history ticks do not count against this cap.")
                 .defineInRange("maxDebtTicks", 72_000, 20, 1_728_000);
-        tickrateCatchupHistoryWindowTicks = builder.comment("Recent weather-history window used as the snow exposure ledger.")
+        tickrateCatchupHistoryWindowTicks = builder.comment("Recent global weather-history window used to derive local snow/melt/no-action exposure.")
                 .defineInRange("historyWindowTicks", 72_000, 20, 1_728_000);
         tickrateCatchupPrecipitationAttemptIntervalTicks = builder.comment("Reserved for a future historical precipitation supplement.",
                         "The current V3 slice gets precipitation attempts by increasing vanilla random tick speed.")
                 .defineInRange("precipitationAttemptIntervalTicks", 48, 1, 24_000);
-        tickrateCatchupMaxBurstChunksPerTick = builder.comment("Global per-server-tick budget for chunks that may receive an increased vanilla random tick speed.",
-                        "This limits how many loaded chunks can be in a catch-up burst during the same tick; it does not change the per-chunk multiplier.")
+        tickrateCatchupMaxBurstChunksPerTick = builder.comment("Target average per-server-tick budget for chunks that may receive an increased vanilla random tick speed.",
+                        "The scheduler uses this target to compute a fair burst probability; short statistical spikes may exceed it, but an emergency cap still limits runaway bursts.",
+                        "This does not change the per-chunk multiplier.")
                 .defineInRange("maxBurstChunksPerTick", 32, 1, 512);
         builder.pop();
         builder.build();

@@ -175,7 +175,12 @@ public final class ClimateCatchupCommands {
         String stamp = result.stamp()
                 .map(value -> "lastAppliedGame=" + value.lastAppliedGameTime()
                         + ", lastSeenGame=" + value.lastSeenGameTime()
-                        + ", burstTicks=" + value.burstTicks())
+                        + ", lastBurstGame=" + value.lastBurstGameTime()
+                        + ", burstTicks=" + value.burstTicks()
+                        + ", pendingAction=" + value.pendingReplayAction()
+                        + ", pendingTicks=" + value.pendingReplayTicks()
+                        + ", pendingDay=" + value.pendingReplayDayTime()
+                        + ", pendingWeather=" + value.pendingReplayWeather())
                 .orElse(result.loaded() ? "stamp=none" : "chunk=unloaded");
         String last = result.lastResult()
                 .map(value -> "last=" + value.status()
@@ -185,9 +190,13 @@ public final class ClimateCatchupCommands {
                         + ", baseRandomTickSpeed=" + value.baseRandomTickSpeed()
                         + ", effectiveRandomTickSpeed=" + value.effectiveRandomTickSpeed()
                         + ", appliedTicks=" + value.appliedTicks()
+                        + ", action=" + value.replayAction()
                         + ", window=" + value.historyWindowTicks()
-                        + ", precipTicks=" + value.precipitationTicks()
-                        + ", precipFraction=" + String.format(Locale.ROOT, "%.3f", value.precipitationFraction()))
+                        + ", snowTicks=" + value.snowTicks()
+                        + ", meltTicks=" + value.meltTicks()
+                        + ", neutralTicks=" + value.neutralTicks()
+                        + ", snowFraction=" + String.format(Locale.ROOT, "%.3f", value.snowFraction())
+                        + ", meltFraction=" + String.format(Locale.ROOT, "%.3f", value.meltFraction()))
                 .orElse("last=none");
         context.getSource().sendSuccess(() -> Component.literal("Arctic Nights tick-rate climate catch-up chunk "
                 + chunkPos.x + "," + chunkPos.z

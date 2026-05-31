@@ -100,6 +100,18 @@ final class ClimateHistoryState extends SavedData {
         return ticks;
     }
 
+    void visitSpansBetween(long fromDayTime, long toDayTime, WeatherSpanVisitor visitor) {
+        long from = Math.min(fromDayTime, toDayTime);
+        long to = Math.max(fromDayTime, toDayTime);
+        for (WeatherSpan span : weatherSpans) {
+            if (span.endDayTime() < from || span.startDayTime() > to) continue;
+            long overlapStart = Math.max(from, span.startDayTime());
+            long overlapEnd = Math.min(to, span.endDayTime());
+            if (overlapEnd <= overlapStart) continue;
+            visitor.accept(overlapStart, overlapEnd, span.state());
+        }
+    }
+
     String debugWindow(long fromDayTime, long toDayTime) {
         long from = Math.min(fromDayTime, toDayTime);
         long to = Math.max(fromDayTime, toDayTime);
@@ -173,6 +185,10 @@ final class ClimateHistoryState extends SavedData {
     }
 
     record WeatherSample(ClimateSnapshot.WeatherState state, boolean recorded) {
+    }
+
+    interface WeatherSpanVisitor {
+        void accept(long startDayTime, long endDayTime, ClimateSnapshot.WeatherState state);
     }
 
     private record WeatherSpan(long startDayTime, long endDayTime, ClimateSnapshot.WeatherState state) {
