@@ -347,26 +347,26 @@ public final class ClimateTickrateCatchup {
         long window = Math.max(0L, to - from);
         if (window <= 0L) return ReplayPlan.zero(source);
 
-        LocalClimateSample sample = LocalClimateSample.of(level, chunk);
+        LocalClimateSamples samples = LocalClimateSamples.of(level, chunk);
         ReplayPlanBuilder builder = new ReplayPlanBuilder(window, source, to);
         long[] cursor = {from};
         history.visitSpansBetween(from, to, (start, end, weatherState) -> {
             if (start > cursor[0]) {
-                addWeatherSpanToReplayPlan(level, sample, builder, cursor[0], start, ClimateSnapshot.WeatherState.CLEAR);
+                addWeatherSpanToReplayPlan(level, samples, builder, cursor[0], start, ClimateSnapshot.WeatherState.CLEAR);
             }
             long spanStart = Math.max(start, cursor[0]);
             if (end > spanStart) {
-                addWeatherSpanToReplayPlan(level, sample, builder, spanStart, end, weatherState);
+                addWeatherSpanToReplayPlan(level, samples, builder, spanStart, end, weatherState);
             }
             cursor[0] = Math.max(cursor[0], end);
         });
         if (cursor[0] < to) {
-            addWeatherSpanToReplayPlan(level, sample, builder, cursor[0], to, ClimateSnapshot.WeatherState.CLEAR);
+            addWeatherSpanToReplayPlan(level, samples, builder, cursor[0], to, ClimateSnapshot.WeatherState.CLEAR);
         }
         return builder.finish();
     }
 
-    private static void addWeatherSpanToReplayPlan(ServerLevel level, LocalClimateSample sample, ReplayPlanBuilder builder,
+    private static void addWeatherSpanToReplayPlan(ServerLevel level, LocalClimateSamples samples, ReplayPlanBuilder builder,
                                                    long start, long end, ClimateSnapshot.WeatherState weatherState) {
         long duration = Math.max(0L, end - start);
         if (duration <= 0L) return;
@@ -374,16 +374,25 @@ public final class ClimateTickrateCatchup {
         long sampleDayTime = start + duration / 2L;
         builder.addRandomSpan(duration, sampleDayTime, weatherState);
 
-        ClimateSnapshot snapshot = ClimateService.sampleSnapshot(level, sample.biome(), sample.pos(), true, weatherState, sampleDayTime);
-        double snowFactor = weatherState == ClimateSnapshot.WeatherState.CLEAR
-                ? 0.0D
-                : ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
-        double meltFactor = 1.0D - ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
+        double snowFactor = 0.0D;
+        double meltFactor = 0.0D;
+        for (LocalClimateSample sample : samples.samples()) {
+            ClimateSnapshot snapshot = ClimateService.sampleSnapshot(level, sample.biome(), sample.pos(), true, weatherState, sampleDayTime);
+            double sampleSnowFactor = weatherState == ClimateSnapshot.WeatherState.CLEAR
+                    ? 0.0D
+                    : ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
+            double sampleMeltFactor = 1.0D - ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
 
-        if (snapshot.precipitationKind() == ClimateSnapshot.PrecipitationKind.NONE) {
-            snowFactor = 0.0D;
-            if (weatherState != ClimateSnapshot.WeatherState.CLEAR) meltFactor = 0.0D;
+            if (snapshot.precipitationKind() == ClimateSnapshot.PrecipitationKind.NONE) {
+                sampleSnowFactor = 0.0D;
+                if (weatherState != ClimateSnapshot.WeatherState.CLEAR) sampleMeltFactor = 0.0D;
+            }
+
+            snowFactor += sampleSnowFactor;
+            meltFactor += sampleMeltFactor;
         }
+        snowFactor /= samples.size();
+        meltFactor /= samples.size();
 
         long snowTicks = Math.round(duration * clamp(snowFactor, 0.0D, 1.0D));
         long meltTicks = Math.round(duration * clamp(meltFactor, 0.0D, 1.0D));
@@ -491,18 +500,37 @@ public final class ClimateTickrateCatchup {
         return String.format(java.util.Locale.ROOT, "%.3f", value);
     }
 
-    private record LocalClimateSample(BlockPos pos, Holder<Biome> biome) {
-        private static LocalClimateSample of(ServerLevel level, LevelChunk chunk) {
+    private record LocalClimateSamples(List<LocalClimateSample> samples) {
+        private static final int[][] SAMPLE_COLUMNS = {
+                {8, 8},
+                {3, 3},
+                {12, 3},
+                {3, 12},
+                {12, 12}
+        };
+
+        private static LocalClimateSamples of(ServerLevel level, LevelChunk chunk) {
             ChunkPos chunkPos = chunk.getPos();
-            int localX = 8;
-            int localZ = 8;
-            int x = chunkPos.getMinBlockX() + localX;
-            int z = chunkPos.getMinBlockZ() + localZ;
-            int y = Mth.clamp(chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, localX, localZ) + 1,
-                    level.getMinBuildHeight(), level.getMaxBuildHeight() - 1);
-            BlockPos pos = new BlockPos(x, y, z);
-            return new LocalClimateSample(pos, chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z)));
+            ArrayList<LocalClimateSample> samples = new ArrayList<>(SAMPLE_COLUMNS.length);
+            for (int[] column : SAMPLE_COLUMNS) {
+                int localX = column[0];
+                int localZ = column[1];
+                int x = chunkPos.getMinBlockX() + localX;
+                int z = chunkPos.getMinBlockZ() + localZ;
+                int y = Mth.clamp(chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, localX, localZ) + 1,
+                        level.getMinBuildHeight(), level.getMaxBuildHeight() - 1);
+                BlockPos pos = new BlockPos(x, y, z);
+                samples.add(new LocalClimateSample(pos, chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z))));
+            }
+            return new LocalClimateSamples(samples);
         }
+
+        private int size() {
+            return samples.size();
+        }
+    }
+
+    private record LocalClimateSample(BlockPos pos, Holder<Biome> biome) {
     }
 
     private static final class ReplayPlanBuilder {
