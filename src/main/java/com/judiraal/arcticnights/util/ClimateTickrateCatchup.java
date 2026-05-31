@@ -241,6 +241,11 @@ public final class ClimateTickrateCatchup {
         return historicalReplay(level) != null;
     }
 
+    public static long historicalReplayDayTime(ServerLevel level) {
+        HistoricalClimateReplay replay = historicalReplay(level);
+        return replay == null ? level.getDayTime() : replay.dayTime();
+    }
+
     public static float historicalOutdoorMinecraftTemperature(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky) {
         HistoricalClimateReplay replay = historicalReplay(level);
         if (replay == null) return ClimateService.outdoorMinecraftTemperature(level, biome, pos, exposedToSky);
@@ -572,15 +577,18 @@ public final class ClimateTickrateCatchup {
         }
 
         private ReplayPlan finish() {
-            List<ClimateTickrateChunkStamp.ReplaySegment> trimmedSegments = trimToLatestReplayDebt(replaySegments,
-                    ArcticNightsConfig.tickrateCatchupMaxDebtTicks.get());
+            long replayWindowTicks = Math.max(0L, ArcticNightsConfig.tickrateCatchupMaxDebtTicks.get());
+            List<ClimateTickrateChunkStamp.ReplaySegment> trimmedSegments = trimToLatestReplayDebt(replaySegments, replayWindowTicks);
             long replayTicks = replayTicks(trimmedSegments);
             long randomTickDebt = Math.min(windowTicks, ArcticNightsConfig.tickrateCatchupMaxRandomTickDebtTicks.get());
             randomTickDebt = Math.max(randomTickDebt, replayTicks);
             RandomClimate randomClimate = randomClimate(randomTickDebt);
-            return new ReplayPlan(source, windowTicks, randomTickDebt, randomClimate.weatherState(), randomClimate.dayTime(), trimmedSegments,
-                    snowTicks(trimmedSegments), meltTicks(trimmedSegments),
-                    neutralTicks + Math.max(0L, windowTicks - snowTicks - meltTicks - neutralTicks));
+            long diagnosticWindowTicks = Math.min(windowTicks, replayWindowTicks);
+            long diagnosticSnowTicks = snowTicks(trimmedSegments);
+            long diagnosticMeltTicks = meltTicks(trimmedSegments);
+            long diagnosticNeutralTicks = Math.max(0L, diagnosticWindowTicks - diagnosticSnowTicks - diagnosticMeltTicks);
+            return new ReplayPlan(source, diagnosticWindowTicks, randomTickDebt, randomClimate.weatherState(), randomClimate.dayTime(), trimmedSegments,
+                    diagnosticSnowTicks, diagnosticMeltTicks, diagnosticNeutralTicks);
         }
 
         private RandomClimate randomClimate(long ticks) {

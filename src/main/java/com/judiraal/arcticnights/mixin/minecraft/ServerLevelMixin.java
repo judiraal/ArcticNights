@@ -50,7 +50,8 @@ public class ServerLevelMixin {
         var biomeHolder = level.getBiome(pos);
         if (ClimateTickrateCatchup.isReplayingHistoricalPrecipitation(level)) {
             float outdoorTemperature = ClimateTickrateCatchup.historicalOutdoorMinecraftTemperature(level, biomeHolder, pos, true);
-            return ClimateService.shouldSnow(level, biomeHolder, pos, outdoorTemperature);
+            long dayTime = ClimateTickrateCatchup.historicalReplayDayTime(level);
+            return ClimateService.shouldSnow(level, biomeHolder, pos, outdoorTemperature, dayTime);
         }
         return ClimateService.shouldSnow(level, biomeHolder, pos);
     }

@@ -15,8 +15,13 @@ public final class UnderTreeSnow {
     }
 
     public static boolean tryPlace(ServerLevel level, BlockPos precipitationSample) {
+        boolean historicalClimate = ClimateTickrateCatchup.isReplayingHistoricalClimate(level);
         boolean historicalPrecipitation = ClimateTickrateCatchup.isReplayingHistoricalPrecipitation(level);
-        if (!level.isRaining() && !historicalPrecipitation) return false;
+        if (historicalClimate) {
+            if (!historicalPrecipitation) return false;
+        } else if (!level.isRaining()) {
+            return false;
+        }
 
         BlockPos canopySurface = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, precipitationSample);
         if (!level.getBlockState(canopySurface.below()).is(BlockTags.LEAVES)) return false;
@@ -25,7 +30,8 @@ public final class UnderTreeSnow {
         var biome = level.getBiome(snowPos);
         if (historicalPrecipitation) {
             float outdoorTemperature = ClimateTickrateCatchup.historicalOutdoorMinecraftTemperature(level, biome, snowPos, true);
-            if (!ClimateService.shouldSnow(level, biome, snowPos, outdoorTemperature)) return false;
+            long dayTime = ClimateTickrateCatchup.historicalReplayDayTime(level);
+            if (!ClimateService.shouldSnow(level, biome, snowPos, outdoorTemperature, dayTime)) return false;
         } else if (!ClimateService.shouldSnow(level, biome, snowPos)) {
             return false;
         }

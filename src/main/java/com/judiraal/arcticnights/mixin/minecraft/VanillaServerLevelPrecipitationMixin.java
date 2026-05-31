@@ -20,7 +20,8 @@ public class VanillaServerLevelPrecipitationMixin {
         var biomeHolder = level.getBiome(pos);
         if (ClimateTickrateCatchup.isReplayingHistoricalPrecipitation(level)) {
             float outdoorTemperature = ClimateTickrateCatchup.historicalOutdoorMinecraftTemperature(level, biomeHolder, pos, true);
-            return ClimateService.precipitationAtAsVanillaType(level, biomeHolder, pos, outdoorTemperature);
+            long dayTime = ClimateTickrateCatchup.historicalReplayDayTime(level);
+            return ClimateService.precipitationAtAsVanillaType(level, biomeHolder, pos, outdoorTemperature, dayTime);
         }
         return ClimateService.precipitationAtAsVanillaType(level, biomeHolder, pos);
     }

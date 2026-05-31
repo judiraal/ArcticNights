@@ -492,9 +492,13 @@ public final class ClimateService {
     }
 
     public static Biome.Precipitation precipitationAtAsVanillaType(LevelReader levelReader, Holder<Biome> biome, BlockPos pos, float outdoorMinecraftTemperature) {
+        return precipitationAtAsVanillaType(levelReader, biome, pos, outdoorMinecraftTemperature, rollDayTime(levelReader));
+    }
+
+    public static Biome.Precipitation precipitationAtAsVanillaType(LevelReader levelReader, Holder<Biome> biome, BlockPos pos, float outdoorMinecraftTemperature, long rollDayTime) {
         if (!biome.value().hasPrecipitation()) return Biome.Precipitation.NONE;
         float snowFactor = snowAccumulationFactor(outdoorMinecraftTemperature);
-        return snowFactorRoll(levelReader, pos, snowFactor) ? Biome.Precipitation.SNOW : Biome.Precipitation.RAIN;
+        return snowFactorRoll(pos, snowFactor, rollDayTime) ? Biome.Precipitation.SNOW : Biome.Precipitation.RAIN;
     }
 
     public static boolean hasSnowPrecipitation(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
@@ -534,7 +538,11 @@ public final class ClimateService {
     }
 
     public static boolean shouldSnow(LevelReader levelReader, Holder<Biome> biome, BlockPos pos, float outdoorMinecraftTemperature) {
-        if (!snowFactorRoll(levelReader, pos, snowAccumulationFactor(outdoorMinecraftTemperature))) return false;
+        return shouldSnow(levelReader, biome, pos, outdoorMinecraftTemperature, rollDayTime(levelReader));
+    }
+
+    public static boolean shouldSnow(LevelReader levelReader, Holder<Biome> biome, BlockPos pos, float outdoorMinecraftTemperature, long rollDayTime) {
+        if (!snowFactorRoll(pos, snowAccumulationFactor(outdoorMinecraftTemperature), rollDayTime)) return false;
         if (pos.getY() < levelReader.getMinBuildHeight()
                 || pos.getY() >= levelReader.getMaxBuildHeight()
                 || levelReader.getBrightness(LightLayer.BLOCK, pos) >= 10) {
@@ -564,16 +572,20 @@ public final class ClimateService {
         return factor * factor * (3.0F - 2.0F * factor);
     }
 
-    private static boolean snowFactorRoll(LevelReader levelReader, BlockPos pos, float factor) {
+    private static boolean snowFactorRoll(BlockPos pos, float factor, long dayTime) {
         if (factor >= 1.0F) return true;
         if (factor <= 0.0F) return false;
 
-        long bucket = levelReader instanceof Level level ? Math.floorDiv(level.getDayTime(), 600L) : 0L;
+        long bucket = Math.floorDiv(Math.max(0L, dayTime), 600L);
         long hash = mix64((long) pos.getX() * 0x9E3779B97F4A7C15L
                 ^ (long) pos.getZ() * 0xBF58476D1CE4E5B9L
                 ^ bucket * 0xD6E8FEB86659FD93L);
         double unit = (hash >>> 11) * 0x1.0p-53;
         return unit < factor;
+    }
+
+    private static long rollDayTime(LevelReader levelReader) {
+        return levelReader instanceof Level level ? level.getDayTime() : 0L;
     }
 
     private static float outdoorMinecraftTemperatureForSnowTest(LevelReader levelReader, Holder<Biome> biome, BlockPos pos) {
