@@ -20,7 +20,9 @@ import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.WeakHashMap;
@@ -78,7 +80,8 @@ public final class ClimateTickrateCatchup {
         Optional<ClimateTickrateChunkStamp> stamp = chunk.flatMap(ClimateTickrateCatchup::stamp);
         RuntimeState runtime = runtime(level);
         long currentGameTime = level.getGameTime();
-        long debt = stamp.map(value -> Math.max(0L, currentGameTime - value.lastAppliedGameTime())).orElse(0L);
+        long debt = stamp.map(value -> Math.max(Math.max(0L, currentGameTime - value.lastAppliedGameTime()),
+                Math.max(value.pendingRandomTicks(), value.pendingReplayTicks()))).orElse(0L);
         int activeBurstTicks = stamp.map(ClimateTickrateChunkStamp::burstTicks).orElse(0);
         return new InspectResult(pos, chunk.isPresent(), stamp, debt, activeBurstTicks, Optional.ofNullable(runtime.results.get(pos.toLong())));
     }
@@ -115,19 +118,20 @@ public final class ClimateTickrateCatchup {
         AttachmentType<ClimateTickrateChunkStamp> attachmentType = ArcticNightsAttachments.TICKRATE_CATCHUP.get();
         boolean newStamp = !chunk.hasData(attachmentType);
         ClimateTickrateChunkStamp stamp;
-        DebtSeed debtSeed = null;
+        ReplayPlan replayPlan = null;
         String source = SOURCE_STAMP_ELAPSED;
         if (newStamp) {
-            debtSeed = newChunkDebtSeed(level, chunk, gameTime, dayTime);
-            long lastApplied = Math.max(0L, gameTime - debtSeed.debtTicks());
-            stamp = new ClimateTickrateChunkStamp(lastApplied, gameTime, 0);
-            stamp.setPendingReplay(debtSeed.exposure().action(), debtSeed.debtTicks(),
-                    debtSeed.exposure().replayWeatherState(), debtSeed.exposure().replayDayTime());
-            source = debtSeed.source();
+            replayPlan = newChunkReplayPlan(level, chunk, gameTime, dayTime);
+            stamp = new ClimateTickrateChunkStamp(gameTime, gameTime, 0);
+            stamp.setPendingPlan(replayPlan.randomTickDebtTicks(), replayPlan.randomWeatherState(),
+                    replayPlan.randomDayTime(), replayPlan.replaySegments());
+            source = replayPlan.source("new");
         } else {
             stamp = chunk.getData(attachmentType);
             if (stamp.hasPendingReplay()) {
                 source = "pending_" + stamp.pendingReplayAction().name().toLowerCase(java.util.Locale.ROOT);
+            } else if (stamp.pendingRandomTicks() > 0L) {
+                source = "pending_random";
             }
         }
 
@@ -135,31 +139,31 @@ public final class ClimateTickrateCatchup {
         if (gameTime < lastApplied) {
             TickResult result = TickResult.reset(pos, "time_rewind", baseRandomTickSpeed);
             level.tickChunk(chunk, baseRandomTickSpeed);
-            stamp.clearPendingReplay();
+            stamp.clearPendingWork();
             applyPlan(chunk, stamp, gameTime, gameTime, 0);
             return result;
         }
 
         long elapsed = gameTime - lastApplied;
-        if (!stamp.hasPendingReplay() && elapsed > threshold) {
-            DebtSeed elapsedDebtSeed = debtSeed != null
-                    ? debtSeed
-                    : elapsedDebtSeed(level, chunk, ClimateHistoryState.get(level), dayTime, elapsed);
-            if (elapsedDebtSeed.debtTicks() > 0L) {
-                stamp.setPendingReplay(elapsedDebtSeed.exposure().action(), elapsedDebtSeed.debtTicks(),
-                        elapsedDebtSeed.exposure().replayWeatherState(), elapsedDebtSeed.exposure().replayDayTime());
-                source = elapsedDebtSeed.source();
-            } else if (debtSeed == null) {
-                source = elapsedDebtSeed.source();
+        if (!stamp.hasPendingWork() && elapsed > threshold) {
+            ReplayPlan elapsedReplayPlan = replayPlan != null
+                    ? replayPlan
+                    : elapsedReplayPlan(level, chunk, ClimateHistoryState.get(level), dayTime, elapsed);
+            if (elapsedReplayPlan.hasWork()) {
+                stamp.setPendingPlan(elapsedReplayPlan.randomTickDebtTicks(), elapsedReplayPlan.randomWeatherState(),
+                        elapsedReplayPlan.randomDayTime(), elapsedReplayPlan.replaySegments());
             }
+            source = elapsedReplayPlan.source("");
         }
 
-        long debt = stamp.hasPendingReplay() ? stamp.pendingReplayTicks() : 0L;
+        long randomDebt = stamp.pendingRandomTicks();
+        long replayDebt = stamp.pendingReplayTicks();
+        long debt = Math.max(randomDebt, replayDebt);
         if (debt <= threshold) {
             boolean shouldPersist = newStamp || debt >= Math.max(1, threshold);
             level.tickChunk(chunk, baseRandomTickSpeed);
-            if (stamp.hasPendingReplay()) {
-                stamp.clearPendingReplay();
+            if (stamp.hasPendingWork()) {
+                stamp.clearPendingWork();
                 shouldPersist = true;
             } else if (elapsed > threshold) {
                 shouldPersist = true;
@@ -173,7 +177,6 @@ public final class ClimateTickrateCatchup {
         if (stamp.burstTicks() >= ArcticNightsConfig.tickrateCatchupMaxBurstTicks.get()) {
             TickResult result = TickResult.skipped(pos, "max_duration", debt, baseRandomTickSpeed, 0L, source);
             level.tickChunk(chunk, baseRandomTickSpeed);
-            stamp.clearPendingReplay();
             applyPlan(chunk, stamp, gameTime, gameTime, 0);
             return result;
         }
@@ -181,52 +184,46 @@ public final class ClimateTickrateCatchup {
         if (baseRandomTickSpeed <= 0) {
             TickResult result = TickResult.skipped(pos, "random_tick_disabled", debt, baseRandomTickSpeed, 0L, source);
             level.tickChunk(chunk, baseRandomTickSpeed);
-            applyPlan(chunk, stamp, lastApplied, gameTime, stamp.burstTicks());
+            applyPlan(chunk, stamp, gameTime, gameTime, stamp.burstTicks());
             return result;
         }
 
         if (!runtime.shouldBurstThisTick(level, pos, stamp, gameTime)) {
-            long appliedTicks = stamp.hasPendingReplay() ? 0L : 1L;
-            long newLastApplied = Math.min(gameTime, lastApplied + appliedTicks);
-            TickResult result = TickResult.skipped(pos, "fairness", debt, baseRandomTickSpeed, appliedTicks, source);
+            TickResult result = TickResult.skipped(pos, "fairness", debt, baseRandomTickSpeed, 0L, source);
             level.tickChunk(chunk, baseRandomTickSpeed);
-            applyPlan(chunk, stamp, newLastApplied, gameTime, stamp.burstTicks());
+            applyPlan(chunk, stamp, gameTime, gameTime, stamp.burstTicks());
             return result;
         }
 
         if (!runtime.claimBurstChunk()) {
-            long appliedTicks = stamp.hasPendingReplay() ? 0L : 1L;
-            long newLastApplied = Math.min(gameTime, lastApplied + appliedTicks);
-            TickResult result = TickResult.skipped(pos, "budget", debt, baseRandomTickSpeed, appliedTicks, source);
+            TickResult result = TickResult.skipped(pos, "budget", debt, baseRandomTickSpeed, 0L, source);
             level.tickChunk(chunk, baseRandomTickSpeed);
-            applyPlan(chunk, stamp, newLastApplied, gameTime, stamp.burstTicks());
+            applyPlan(chunk, stamp, gameTime, gameTime, stamp.burstTicks());
             return result;
         }
 
-        int multiplier = multiplier(debt);
-        int effectiveRandomTickSpeed = effectiveRandomTickSpeed(baseRandomTickSpeed, multiplier);
-        long appliedTicks = multiplier;
-        long newLastApplied = Math.min(gameTime, lastApplied + Math.min(debt, appliedTicks));
-        int burstTicks = stamp.burstTicks() + 1;
-        if (gameTime - newLastApplied <= threshold) {
-            newLastApplied = gameTime;
-            burstTicks = 0;
+        ClimateTickrateChunkStamp.ReplaySegment replaySegment = stamp.pendingReplaySegment();
+        long currentReplayTicks = replaySegment == null ? 0L : replaySegment.ticks();
+        long burstDebt = Math.max(randomDebt, currentReplayTicks);
+        long appliedTicks = multiplier(burstDebt);
+        if (currentReplayTicks > 0L) {
+            appliedTicks = Math.min(appliedTicks, currentReplayTicks);
         }
-        Exposure exposure = stamp.hasPendingReplay()
-                ? pendingExposure(stamp)
-                : debtSeed != null && debtSeed.exposure() != null
-                ? debtSeed.exposure()
-                : Exposure.none();
+        int multiplier = (int) Math.max(1L, Math.min(Integer.MAX_VALUE, appliedTicks));
+        int effectiveRandomTickSpeed = effectiveRandomTickSpeed(baseRandomTickSpeed, multiplier);
+        int burstTicks = stamp.burstTicks() + 1;
+        Exposure exposure = replaySegment != null
+                ? segmentExposure(replaySegment)
+                : Exposure.random(randomDebt, stamp.pendingRandomWeather(), stamp.pendingRandomDayTime());
         TickResult result = TickResult.burst(pos, debt, multiplier, baseRandomTickSpeed, effectiveRandomTickSpeed,
                 appliedTicks, burstTicks, exposure, source);
         runWithHistoricalClimateReplay(level, result, () -> level.tickChunk(chunk, effectiveRandomTickSpeed));
         MachineCatchupBridge.tickSupportedBlockEntities(level, chunk, result);
-        stamp.consumePendingReplay(appliedTicks);
-        if (!stamp.hasPendingReplay()) {
-            newLastApplied = gameTime;
+        stamp.consumePendingWork(appliedTicks);
+        if (!stamp.hasPendingWork()) {
             burstTicks = 0;
         }
-        applyPlan(chunk, stamp, newLastApplied, gameTime, burstTicks, gameTime);
+        applyPlan(chunk, stamp, gameTime, gameTime, burstTicks, gameTime);
         return result;
     }
 
@@ -238,6 +235,10 @@ public final class ClimateTickrateCatchup {
     public static boolean isReplayingHistoricalMelt(ServerLevel level) {
         HistoricalClimateReplay replay = historicalReplay(level);
         return replay != null && replay.action() == ClimateTickrateChunkStamp.ReplayAction.MELT;
+    }
+
+    public static boolean isReplayingHistoricalClimate(ServerLevel level) {
+        return historicalReplay(level) != null;
     }
 
     public static float historicalOutdoorMinecraftTemperature(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky) {
@@ -281,7 +282,7 @@ public final class ClimateTickrateCatchup {
 
     private static HistoricalClimateReplay replayFor(ServerLevel level, TickResult result) {
         ClimateTickrateChunkStamp.ReplayAction action = result.replayAction();
-        if (action == ClimateTickrateChunkStamp.ReplayAction.NONE || result.actionTicks() <= 0L) return null;
+        if (result.appliedTicks() <= 0L || result.historyWindowTicks() <= 0L) return null;
         return new HistoricalClimateReplay(level, action, result.replayWeatherState(), result.replayDayTime());
     }
 
@@ -319,94 +320,102 @@ public final class ClimateTickrateCatchup {
         return (int) Math.min(Integer.MAX_VALUE, effective);
     }
 
-    private static DebtSeed newChunkDebtSeed(ServerLevel level, LevelChunk chunk, long gameTime, long dayTime) {
+    private static ReplayPlan newChunkReplayPlan(ServerLevel level, LevelChunk chunk, long gameTime, long dayTime) {
         if (!ArcticNightsConfig.tickrateCatchupNewChunksUseRecentExposure.get()) {
-            return DebtSeed.zero("new_disabled");
+            return ReplayPlan.zero("disabled");
         }
 
         long maxWindow = Math.min(gameTime, ArcticNightsConfig.tickrateCatchupHistoryWindowTicks.get());
         long window = Math.min(maxWindow, Math.max(0L, dayTime));
         if (window <= 0L) {
-            return DebtSeed.zero("new_no_history");
+            return ReplayPlan.zero("no_history");
         }
 
         long fromDayTime = Math.max(0L, dayTime - window);
-        Exposure exposure = exposureBetween(level, chunk, ClimateHistoryState.get(level), fromDayTime, dayTime);
-        long debt = exposure.action() == ClimateTickrateChunkStamp.ReplayAction.SNOW
-                ? Math.min(exposure.actionTicks(), ArcticNightsConfig.tickrateCatchupMaxDebtTicks.get())
-                : 0L;
-        return new DebtSeed(exposure.action() == ClimateTickrateChunkStamp.ReplayAction.SNOW
-                ? "new_snow_history"
-                : "new_no_snow_history", debt, exposure.limitActionTicks(debt));
+        return replayPlanBetween(level, chunk, ClimateHistoryState.get(level), fromDayTime, dayTime, "history");
     }
 
-    private static DebtSeed elapsedDebtSeed(ServerLevel level, LevelChunk chunk, ClimateHistoryState history, long dayTime, long elapsed) {
+    private static ReplayPlan elapsedReplayPlan(ServerLevel level, LevelChunk chunk, ClimateHistoryState history, long dayTime, long elapsed) {
         long window = Math.min(Math.min(elapsed, ArcticNightsConfig.tickrateCatchupHistoryWindowTicks.get()), Math.max(1L, dayTime));
         long fromDayTime = Math.max(0L, dayTime - window);
-        Exposure exposure = exposureBetween(level, chunk, history, fromDayTime, dayTime);
-        long debt = Math.min(exposure.actionTicks(), ArcticNightsConfig.tickrateCatchupMaxDebtTicks.get());
-        String source = switch (exposure.action()) {
-            case SNOW -> "snow_history";
-            case MELT -> "melt_history";
-            case NONE -> "no_action_history";
-        };
-        return new DebtSeed(source, debt, exposure.limitActionTicks(debt));
+        return replayPlanBetween(level, chunk, history, fromDayTime, dayTime, "history");
     }
 
-    private static Exposure exposureBetween(ServerLevel level, LevelChunk chunk, ClimateHistoryState history, long fromDayTime, long toDayTime) {
+    private static ReplayPlan replayPlanBetween(ServerLevel level, LevelChunk chunk, ClimateHistoryState history, long fromDayTime, long toDayTime, String source) {
         long from = Math.min(fromDayTime, toDayTime);
         long to = Math.max(fromDayTime, toDayTime);
         long window = Math.max(0L, to - from);
-        if (window <= 0L) return Exposure.none();
+        if (window <= 0L) return ReplayPlan.zero(source);
 
         LocalClimateSample sample = LocalClimateSample.of(level, chunk);
-        ExposureAccumulator accumulator = new ExposureAccumulator(window);
+        ReplayPlanBuilder builder = new ReplayPlanBuilder(window, source, to);
+        long[] cursor = {from};
         history.visitSpansBetween(from, to, (start, end, weatherState) -> {
-            long duration = Math.max(0L, end - start);
-            if (duration <= 0L) return;
-
-            long sampleDayTime = start + duration / 2L;
-            ClimateSnapshot snapshot = ClimateService.sampleSnapshot(level, sample.biome(), sample.pos(), true, weatherState, sampleDayTime);
-            double snowFactor = weatherState == ClimateSnapshot.WeatherState.CLEAR
-                    ? 0.0D
-                    : ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
-            double meltFactor = 1.0D - ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
-
-            if (snapshot.precipitationKind() == ClimateSnapshot.PrecipitationKind.NONE) {
-                snowFactor = 0.0D;
-                if (weatherState != ClimateSnapshot.WeatherState.CLEAR) meltFactor = 0.0D;
+            if (start > cursor[0]) {
+                addWeatherSpanToReplayPlan(level, sample, builder, cursor[0], start, ClimateSnapshot.WeatherState.CLEAR);
             }
-
-            long snowTicks = Math.round(duration * clamp(snowFactor, 0.0D, 1.0D));
-            long meltTicks = Math.round(duration * clamp(meltFactor, 0.0D, 1.0D));
-            if (snowTicks + meltTicks > duration) {
-                long overflow = snowTicks + meltTicks - duration;
-                if (meltTicks >= overflow) {
-                    meltTicks -= overflow;
-                } else {
-                    snowTicks = Math.max(0L, snowTicks - (overflow - meltTicks));
-                    meltTicks = 0L;
-                }
+            long spanStart = Math.max(start, cursor[0]);
+            if (end > spanStart) {
+                addWeatherSpanToReplayPlan(level, sample, builder, spanStart, end, weatherState);
             }
-
-            accumulator.addSnow(snowTicks, sampleDayTime, weatherState);
-            accumulator.addMelt(meltTicks, sampleDayTime, weatherState);
-            accumulator.addNeutral(Math.max(0L, duration - snowTicks - meltTicks));
+            cursor[0] = Math.max(cursor[0], end);
         });
-        return accumulator.finish();
+        if (cursor[0] < to) {
+            addWeatherSpanToReplayPlan(level, sample, builder, cursor[0], to, ClimateSnapshot.WeatherState.CLEAR);
+        }
+        return builder.finish();
     }
 
-    private static Exposure pendingExposure(ClimateTickrateChunkStamp stamp) {
-        long ticks = stamp.pendingReplayTicks();
-        long window = Math.max(0L, ticks);
-        return new Exposure(window,
-                stamp.pendingReplayAction() == ClimateTickrateChunkStamp.ReplayAction.SNOW ? ticks : 0L,
-                stamp.pendingReplayAction() == ClimateTickrateChunkStamp.ReplayAction.MELT ? ticks : 0L,
+    private static void addWeatherSpanToReplayPlan(ServerLevel level, LocalClimateSample sample, ReplayPlanBuilder builder,
+                                                   long start, long end, ClimateSnapshot.WeatherState weatherState) {
+        long duration = Math.max(0L, end - start);
+        if (duration <= 0L) return;
+
+        long sampleDayTime = start + duration / 2L;
+        builder.addRandomSpan(duration, sampleDayTime, weatherState);
+
+        ClimateSnapshot snapshot = ClimateService.sampleSnapshot(level, sample.biome(), sample.pos(), true, weatherState, sampleDayTime);
+        double snowFactor = weatherState == ClimateSnapshot.WeatherState.CLEAR
+                ? 0.0D
+                : ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
+        double meltFactor = 1.0D - ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
+
+        if (snapshot.precipitationKind() == ClimateSnapshot.PrecipitationKind.NONE) {
+            snowFactor = 0.0D;
+            if (weatherState != ClimateSnapshot.WeatherState.CLEAR) meltFactor = 0.0D;
+        }
+
+        long snowTicks = Math.round(duration * clamp(snowFactor, 0.0D, 1.0D));
+        long meltTicks = Math.round(duration * clamp(meltFactor, 0.0D, 1.0D));
+        if (snowTicks + meltTicks > duration) {
+            long overflow = snowTicks + meltTicks - duration;
+            if (meltTicks >= overflow) {
+                meltTicks -= overflow;
+            } else {
+                snowTicks = Math.max(0L, snowTicks - (overflow - meltTicks));
+                meltTicks = 0L;
+            }
+        }
+
+        long actionTicks = Math.abs(snowTicks - meltTicks);
+        if (snowTicks > meltTicks) {
+            builder.addAction(ClimateTickrateChunkStamp.ReplayAction.SNOW, actionTicks, sampleDayTime, weatherState);
+        } else if (meltTicks > snowTicks) {
+            builder.addAction(ClimateTickrateChunkStamp.ReplayAction.MELT, actionTicks, sampleDayTime, weatherState);
+        }
+        builder.addNeutral(Math.max(0L, duration - actionTicks));
+    }
+
+    private static Exposure segmentExposure(ClimateTickrateChunkStamp.ReplaySegment segment) {
+        long ticks = segment.ticks();
+        return new Exposure(ticks,
+                segment.action() == ClimateTickrateChunkStamp.ReplayAction.SNOW ? ticks : 0L,
+                segment.action() == ClimateTickrateChunkStamp.ReplayAction.MELT ? ticks : 0L,
                 0L,
                 ticks,
-                stamp.pendingReplayAction(),
-                stamp.pendingReplayWeather(),
-                stamp.pendingReplayDayTime());
+                segment.action(),
+                segment.weather(),
+                segment.dayTime());
     }
 
     private static void recordResult(RuntimeState runtime, TickResult result) {
@@ -496,41 +505,37 @@ public final class ClimateTickrateCatchup {
         }
     }
 
-    private static final class ExposureAccumulator {
+    private static final class ReplayPlanBuilder {
         private final long windowTicks;
+        private final String source;
+        private final long fallbackDayTime;
+        private final ArrayList<ClimateTickrateChunkStamp.ReplaySegment> replaySegments = new ArrayList<>();
+        private final ArrayList<RandomSpan> randomSpans = new ArrayList<>();
         private long snowTicks;
         private long meltTicks;
         private long neutralTicks;
-        private long snowWeightedDayTime;
-        private long meltWeightedDayTime;
-        private long snowWeatherTicks;
-        private long meltWeatherTicks;
-        private ClimateSnapshot.WeatherState snowWeatherState = ClimateSnapshot.WeatherState.RAIN;
-        private ClimateSnapshot.WeatherState meltWeatherState = ClimateSnapshot.WeatherState.CLEAR;
 
-        private ExposureAccumulator(long windowTicks) {
+        private ReplayPlanBuilder(long windowTicks, String source, long fallbackDayTime) {
             this.windowTicks = Math.max(0L, windowTicks);
+            this.source = source;
+            this.fallbackDayTime = Math.max(0L, fallbackDayTime);
         }
 
-        private void addSnow(long ticks, long dayTime, ClimateSnapshot.WeatherState weatherState) {
+        private void addRandomSpan(long ticks, long dayTime, ClimateSnapshot.WeatherState weatherState) {
             if (ticks <= 0L) return;
-            snowTicks += ticks;
-            snowWeightedDayTime += ticks * Math.max(0L, dayTime);
-            if (ticks > snowWeatherTicks) {
-                snowWeatherTicks = ticks;
-                snowWeatherState = weatherState == ClimateSnapshot.WeatherState.CLEAR
+            randomSpans.add(new RandomSpan(ticks, weatherState, dayTime));
+        }
+
+        private void addAction(ClimateTickrateChunkStamp.ReplayAction action, long ticks, long dayTime, ClimateSnapshot.WeatherState weatherState) {
+            if (ticks <= 0L) return;
+            ClimateSnapshot.WeatherState replayWeather = action == ClimateTickrateChunkStamp.ReplayAction.SNOW && weatherState == ClimateSnapshot.WeatherState.CLEAR
                         ? ClimateSnapshot.WeatherState.RAIN
                         : weatherState;
-            }
-        }
-
-        private void addMelt(long ticks, long dayTime, ClimateSnapshot.WeatherState weatherState) {
-            if (ticks <= 0L) return;
-            meltTicks += ticks;
-            meltWeightedDayTime += ticks * Math.max(0L, dayTime);
-            if (ticks > meltWeatherTicks) {
-                meltWeatherTicks = ticks;
-                meltWeatherState = weatherState;
+            replaySegments.add(new ClimateTickrateChunkStamp.ReplaySegment(action, ticks, replayWeather, dayTime));
+            if (action == ClimateTickrateChunkStamp.ReplayAction.SNOW) {
+                snowTicks += ticks;
+            } else if (action == ClimateTickrateChunkStamp.ReplayAction.MELT) {
+                meltTicks += ticks;
             }
         }
 
@@ -538,25 +543,114 @@ public final class ClimateTickrateCatchup {
             neutralTicks += Math.max(0L, ticks);
         }
 
-        private Exposure finish() {
-            long effectiveNeutralTicks = neutralTicks + Math.max(0L, windowTicks - snowTicks - meltTicks - neutralTicks);
-            long actionTicks = Math.abs(snowTicks - meltTicks);
-            ClimateTickrateChunkStamp.ReplayAction action = ClimateTickrateChunkStamp.ReplayAction.NONE;
-            ClimateSnapshot.WeatherState weatherState = ClimateSnapshot.WeatherState.CLEAR;
-            long replayDayTime = 0L;
+        private ReplayPlan finish() {
+            List<ClimateTickrateChunkStamp.ReplaySegment> trimmedSegments = trimToLatestReplayDebt(replaySegments,
+                    ArcticNightsConfig.tickrateCatchupMaxDebtTicks.get());
+            long replayTicks = replayTicks(trimmedSegments);
+            long randomTickDebt = Math.min(windowTicks, ArcticNightsConfig.tickrateCatchupMaxRandomTickDebtTicks.get());
+            randomTickDebt = Math.max(randomTickDebt, replayTicks);
+            RandomClimate randomClimate = randomClimate(randomTickDebt);
+            return new ReplayPlan(source, windowTicks, randomTickDebt, randomClimate.weatherState(), randomClimate.dayTime(), trimmedSegments,
+                    snowTicks(trimmedSegments), meltTicks(trimmedSegments),
+                    neutralTicks + Math.max(0L, windowTicks - snowTicks - meltTicks - neutralTicks));
+        }
 
-            if (snowTicks > meltTicks) {
-                action = ClimateTickrateChunkStamp.ReplayAction.SNOW;
-                weatherState = snowWeatherState;
-                replayDayTime = snowTicks == 0L ? 0L : snowWeightedDayTime / snowTicks;
-            } else if (meltTicks > snowTicks) {
-                action = ClimateTickrateChunkStamp.ReplayAction.MELT;
-                weatherState = meltWeatherState;
-                replayDayTime = meltTicks == 0L ? 0L : meltWeightedDayTime / meltTicks;
+        private RandomClimate randomClimate(long ticks) {
+            long total = randomSpanTicks(randomSpans);
+            long keep = Math.max(0L, Math.min(total, ticks));
+            if (keep <= 0L) {
+                return new RandomClimate(ClimateSnapshot.WeatherState.CLEAR, fallbackDayTime);
             }
 
-            return new Exposure(windowTicks, snowTicks, meltTicks, effectiveNeutralTicks, actionTicks, action, weatherState, replayDayTime);
+            long skip = total - keep;
+            long clearTicks = 0L;
+            long rainTicks = 0L;
+            long thunderTicks = 0L;
+            double weightedDayTime = 0.0D;
+            long usedTicks = 0L;
+            for (RandomSpan span : randomSpans) {
+                if (skip >= span.ticks()) {
+                    skip -= span.ticks();
+                    continue;
+                }
+
+                long spanTicks = span.ticks() - skip;
+                skip = 0L;
+                usedTicks += spanTicks;
+                weightedDayTime += span.dayTime() * (double) spanTicks;
+                if (span.weatherState() == ClimateSnapshot.WeatherState.THUNDER) {
+                    thunderTicks += spanTicks;
+                } else if (span.weatherState() == ClimateSnapshot.WeatherState.RAIN) {
+                    rainTicks += spanTicks;
+                } else {
+                    clearTicks += spanTicks;
+                }
+            }
+
+            ClimateSnapshot.WeatherState weatherState = dominantWeather(clearTicks, rainTicks, thunderTicks);
+            long dayTime = usedTicks <= 0L ? fallbackDayTime : Math.max(0L, Math.round(weightedDayTime / usedTicks));
+            return new RandomClimate(weatherState, dayTime);
         }
+    }
+
+    private static ClimateSnapshot.WeatherState dominantWeather(long clearTicks, long rainTicks, long thunderTicks) {
+        if (thunderTicks >= rainTicks && thunderTicks >= clearTicks) return ClimateSnapshot.WeatherState.THUNDER;
+        if (rainTicks >= clearTicks) return ClimateSnapshot.WeatherState.RAIN;
+        return ClimateSnapshot.WeatherState.CLEAR;
+    }
+
+    private static long randomSpanTicks(List<RandomSpan> spans) {
+        long ticks = 0L;
+        for (RandomSpan span : spans) {
+            ticks += span.ticks();
+        }
+        return ticks;
+    }
+
+    private static List<ClimateTickrateChunkStamp.ReplaySegment> trimToLatestReplayDebt(
+            List<ClimateTickrateChunkStamp.ReplaySegment> segments, long maxTicks) {
+        long total = replayTicks(segments);
+        long keep = Math.max(0L, Math.min(total, maxTicks));
+        if (keep <= 0L) return List.of();
+        long skip = total - keep;
+        ArrayList<ClimateTickrateChunkStamp.ReplaySegment> trimmed = new ArrayList<>();
+        for (ClimateTickrateChunkStamp.ReplaySegment segment : segments) {
+            if (skip >= segment.ticks()) {
+                skip -= segment.ticks();
+                continue;
+            }
+            if (skip > 0L) {
+                trimmed.add(segment.withTicks(segment.ticks() - skip));
+                skip = 0L;
+            } else {
+                trimmed.add(segment);
+            }
+        }
+        return trimmed;
+    }
+
+    private static long replayTicks(List<ClimateTickrateChunkStamp.ReplaySegment> segments) {
+        long ticks = 0L;
+        for (ClimateTickrateChunkStamp.ReplaySegment segment : segments) {
+            ticks += segment.ticks();
+        }
+        return ticks;
+    }
+
+    private static long snowTicks(List<ClimateTickrateChunkStamp.ReplaySegment> segments) {
+        long ticks = 0L;
+        for (ClimateTickrateChunkStamp.ReplaySegment segment : segments) {
+            if (segment.action() == ClimateTickrateChunkStamp.ReplayAction.SNOW) ticks += segment.ticks();
+        }
+        return ticks;
+    }
+
+    private static long meltTicks(List<ClimateTickrateChunkStamp.ReplaySegment> segments) {
+        long ticks = 0L;
+        for (ClimateTickrateChunkStamp.ReplaySegment segment : segments) {
+            if (segment.action() == ClimateTickrateChunkStamp.ReplayAction.MELT) ticks += segment.ticks();
+        }
+        return ticks;
     }
 
     private static final class RuntimeState {
@@ -644,6 +738,13 @@ public final class ClimateTickrateCatchup {
                     ClimateTickrateChunkStamp.ReplayAction.NONE, ClimateSnapshot.WeatherState.CLEAR, 0L);
         }
 
+        private static Exposure random(long ticks, ClimateSnapshot.WeatherState weatherState, long dayTime) {
+            return new Exposure(Math.max(0L, ticks), 0L, 0L, Math.max(0L, ticks), 0L,
+                    ClimateTickrateChunkStamp.ReplayAction.NONE,
+                    weatherState == null ? ClimateSnapshot.WeatherState.CLEAR : weatherState,
+                    Math.max(0L, dayTime));
+        }
+
         private double snowFraction() {
             return historyWindowTicks <= 0L ? 0.0D : Mth.clamp(snowTicks / (double) historyWindowTicks, 0.0D, 1.0D);
         }
@@ -652,29 +753,60 @@ public final class ClimateTickrateCatchup {
             return historyWindowTicks <= 0L ? 0.0D : Mth.clamp(meltTicks / (double) historyWindowTicks, 0.0D, 1.0D);
         }
 
-        private Exposure limitActionTicks(long ticks) {
-            long limited = Math.max(0L, ticks);
-            if (action == ClimateTickrateChunkStamp.ReplayAction.SNOW) {
-                return new Exposure(historyWindowTicks, Math.min(snowTicks, limited), meltTicks, neutralTicks,
-                        limited, action, replayWeatherState, replayDayTime);
-            }
-            if (action == ClimateTickrateChunkStamp.ReplayAction.MELT) {
-                return new Exposure(historyWindowTicks, snowTicks, Math.min(meltTicks, limited), neutralTicks,
-                        limited, action, replayWeatherState, replayDayTime);
-            }
-            return this;
-        }
     }
 
-    private record DebtSeed(String source, long debtTicks, Exposure exposure) {
-        private static DebtSeed zero(String source) {
-            return new DebtSeed(source, 0L, Exposure.none());
+    private record ReplayPlan(
+            String source,
+            long historyWindowTicks,
+            long randomTickDebtTicks,
+            ClimateSnapshot.WeatherState randomWeatherState,
+            long randomDayTime,
+            List<ClimateTickrateChunkStamp.ReplaySegment> replaySegments,
+            long snowTicks,
+            long meltTicks,
+            long neutralTicks
+    ) {
+        private static ReplayPlan zero(String source) {
+            return new ReplayPlan(source, 0L, 0L, ClimateSnapshot.WeatherState.CLEAR, 0L, List.of(), 0L, 0L, 0L);
+        }
+
+        private boolean hasWork() {
+            return randomTickDebtTicks > 0L || !replaySegments.isEmpty();
+        }
+
+        private String source(String prefix) {
+            String normalizedPrefix = prefix == null || prefix.isEmpty() ? "" : prefix + "_";
+            if (!replaySegments.isEmpty()) {
+                return normalizedPrefix + replaySegments.get(0).action().name().toLowerCase(java.util.Locale.ROOT) + "_" + source;
+            }
+            if (randomTickDebtTicks > 0L) {
+                return normalizedPrefix + "random_" + source;
+            }
+            return normalizedPrefix + source;
         }
     }
 
     private record HistoricalClimateReplay(
             ServerLevel level,
             ClimateTickrateChunkStamp.ReplayAction action,
+            ClimateSnapshot.WeatherState weatherState,
+            long dayTime
+    ) {
+    }
+
+    private record RandomSpan(
+            long ticks,
+            ClimateSnapshot.WeatherState weatherState,
+            long dayTime
+    ) {
+        private RandomSpan {
+            ticks = Math.max(0L, ticks);
+            weatherState = weatherState == null ? ClimateSnapshot.WeatherState.CLEAR : weatherState;
+            dayTime = Math.max(0L, dayTime);
+        }
+    }
+
+    private record RandomClimate(
             ClimateSnapshot.WeatherState weatherState,
             long dayTime
     ) {

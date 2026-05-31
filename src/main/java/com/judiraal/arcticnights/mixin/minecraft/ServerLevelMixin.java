@@ -35,6 +35,10 @@ public class ServerLevelMixin {
         if (!ArcticNightsFeatures.climateSystem()) return biome.shouldFreeze(levelReader, pos);
         ServerLevel level = (ServerLevel) (Object) this;
         var biomeHolder = level.getBiome(pos);
+        if (ClimateTickrateCatchup.isReplayingHistoricalClimate(level)) {
+            float outdoorTemperature = ClimateTickrateCatchup.historicalOutdoorMinecraftTemperature(level, biomeHolder, pos, true);
+            return ClimateService.shouldFreeze(level, biomeHolder, pos, true, outdoorTemperature);
+        }
         return ClimateService.shouldFreeze(level, biomeHolder, pos);
     }
 
@@ -54,7 +58,10 @@ public class ServerLevelMixin {
     @Redirect(method = "tickPrecipitation",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;isRaining()Z"))
     private boolean arcticnights$historicalCatchupRain(ServerLevel level) {
-        return level.isRaining() || ClimateTickrateCatchup.isReplayingHistoricalPrecipitation(level);
+        if (ClimateTickrateCatchup.isReplayingHistoricalClimate(level)) {
+            return ClimateTickrateCatchup.isReplayingHistoricalPrecipitation(level);
+        }
+        return level.isRaining();
     }
 
     @Redirect(method = "tickPrecipitation",

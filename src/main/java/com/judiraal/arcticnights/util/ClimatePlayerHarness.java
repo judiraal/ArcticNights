@@ -114,7 +114,12 @@ public final class ClimatePlayerHarness {
         ClimateTickrateCatchup.InspectResult inspect = ClimateTickrateCatchup.inspect(level, pos);
         String stamp = inspect.stamp()
                 .map(value -> "lastAppliedGame:" + value.lastAppliedGameTime()
-                        + "|debt:" + Math.max(0L, level.getGameTime() - value.lastAppliedGameTime())
+                        + "|debt:" + Math.max(Math.max(0L, level.getGameTime() - value.lastAppliedGameTime()),
+                        Math.max(value.pendingRandomTicks(), value.pendingReplayTicks()))
+                        + "|pendingRandom:" + value.pendingRandomTicks()
+                        + "|pendingRandomWeather:" + value.pendingRandomWeather()
+                        + "|pendingRandomDay:" + value.pendingRandomDayTime()
+                        + "|pendingReplay:" + value.pendingReplayTicks()
                         + "|lastBurstGame:" + value.lastBurstGameTime()
                         + "|burstTicks:" + value.burstTicks())
                 .orElse("stamp:none");

@@ -39,6 +39,7 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.IntValue tickrateCatchupTargetTicks;
     public static ModConfigSpec.IntValue tickrateCatchupMaxMultiplier;
     public static ModConfigSpec.IntValue tickrateCatchupMaxBurstTicks;
+    public static ModConfigSpec.IntValue tickrateCatchupMaxRandomTickDebtTicks;
     public static ModConfigSpec.IntValue tickrateCatchupMaxDebtTicks;
     public static ModConfigSpec.IntValue tickrateCatchupHistoryWindowTicks;
     public static ModConfigSpec.IntValue tickrateCatchupPrecipitationAttemptIntervalTicks;
@@ -103,8 +104,8 @@ public class ArcticNightsConfig {
         tickrateClimateCatchup = builder.comment("Temporarily increase the random tick speed passed into vanilla per-chunk ticking when loaded chunks have missed climate ticks.",
                         "This V3 path hooks the normal chunk tick instead of running the V1 chunk-load replay queue or V2 side-loop climate mutations.")
                 .define("enabled", false);
-        tickrateCatchupNewChunksUseRecentExposure = builder.comment("Treat chunks without a tick-rate stamp as having recent precipitation debt.",
-                        "Use only in controlled playtests; freshly generated chunks derive local snow debt from recorded global weather history.")
+        tickrateCatchupNewChunksUseRecentExposure = builder.comment("Treat chunks without a tick-rate stamp as having recent climate catch-up debt.",
+                        "Use only in controlled playtests; freshly generated chunks derive local snow/melt/random-tick debt from recorded global weather history.")
                 .define("newChunksUseRecentExposure", false);
         tickrateCatchupDebtThresholdTicks = builder.comment("Ignore per-chunk climate debt at or below this many game ticks.")
                 .defineInRange("debtThresholdTicks", 20, 0, 20_000);
@@ -112,8 +113,12 @@ public class ArcticNightsConfig {
                 .defineInRange("targetCatchupTicks", 100, 1, 20_000);
         tickrateCatchupMaxMultiplier = builder.comment("Maximum multiplier applied to vanilla random tick speed during a burst.")
                 .defineInRange("maxMultiplier", 100, 1, 300);
-        tickrateCatchupMaxBurstTicks = builder.comment("Maximum consecutive server ticks one chunk may spend in a catch-up burst before residual debt is discarded.")
+        tickrateCatchupMaxBurstTicks = builder.comment("Maximum consecutive server ticks one chunk may spend in a catch-up burst before yielding to normal chunk ticking.",
+                        "Residual debt is kept and may continue in a later burst.")
                 .defineInRange("maxBurstTicks", 100, 1, 20_000);
+        tickrateCatchupMaxRandomTickDebtTicks = builder.comment("Maximum random-tick catch-up ticks the tick-rate catch-up path will repay.",
+                        "This includes clear/cold no-action history, so water freezing and other random ticks can catch up without requiring snow or melt history.")
+                .defineInRange("maxRandomTickDebtTicks", 72_000, 20, 1_728_000);
         tickrateCatchupMaxDebtTicks = builder.comment("Maximum actionable local snow/melt replay ticks the tick-rate catch-up path will repay.",
                         "Neutral weather-history ticks do not count against this cap.")
                 .defineInRange("maxDebtTicks", 72_000, 20, 1_728_000);

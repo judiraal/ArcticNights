@@ -177,8 +177,12 @@ public final class ClimateCatchupCommands {
                         + ", lastSeenGame=" + value.lastSeenGameTime()
                         + ", lastBurstGame=" + value.lastBurstGameTime()
                         + ", burstTicks=" + value.burstTicks()
+                        + ", pendingRandomTicks=" + value.pendingRandomTicks()
+                        + ", pendingRandomDay=" + value.pendingRandomDayTime()
+                        + ", pendingRandomWeather=" + value.pendingRandomWeather()
                         + ", pendingAction=" + value.pendingReplayAction()
                         + ", pendingTicks=" + value.pendingReplayTicks()
+                        + ", pendingSegments=" + value.pendingReplaySegments()
                         + ", pendingDay=" + value.pendingReplayDayTime()
                         + ", pendingWeather=" + value.pendingReplayWeather())
                 .orElse(result.loaded() ? "stamp=none" : "chunk=unloaded");
