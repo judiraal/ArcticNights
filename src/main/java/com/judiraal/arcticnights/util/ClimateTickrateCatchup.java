@@ -146,12 +146,13 @@ public final class ClimateTickrateCatchup {
         }
 
         long elapsed = gameTime - lastApplied;
-        ReplayPlan preemptPlan = neutralRandomPreemptionPlan(level, chunk, stamp, gameTime, dayTime, threshold);
+        String preemptSourcePrefix = preemptionSourcePrefix(stamp);
+        ReplayPlan preemptPlan = pendingWorkPreemptionPlan(level, chunk, stamp, gameTime, dayTime, threshold);
         if (preemptPlan != null) {
             stamp.setPendingPlan(preemptPlan.replayTicks(), preemptPlan.randomWeatherState(),
                     preemptPlan.randomDayTime(), preemptPlan.replaySegments(),
                     preemptPlan.historyStartGameTime(), preemptPlan.historyEndGameTime());
-            source = preemptPlan.source("preempt_random");
+            source = preemptPlan.source(preemptSourcePrefix);
         }
 
         if (!stamp.hasPendingWork() && elapsed > threshold) {
@@ -360,16 +361,47 @@ public final class ClimateTickrateCatchup {
         if (stamp.pendingRandomTicks() <= 0L) return null;
         if (stamp.pendingRandomWeather() != ClimateSnapshot.WeatherState.CLEAR) return null;
 
-        long historyWindow = Math.max(1L, ArcticNightsConfig.tickrateCatchupHistoryWindowTicks.get());
-        long fallbackWindow = Math.min(Math.max(0L, stamp.pendingRandomTicks()), Math.min(gameTime, historyWindow));
-        long fromGameTime = stamp.pendingHistoryEndGameTime() > 0L
-                ? stamp.pendingHistoryEndGameTime()
-                : Math.max(0L, gameTime - fallbackWindow);
-        fromGameTime = Math.max(fromGameTime, Math.max(0L, gameTime - historyWindow));
+        long fromGameTime = preemptionFromGameTime(stamp, gameTime);
         if (gameTime - fromGameTime <= threshold) return null;
 
         ReplayPlan plan = replayPlanBetween(level, chunk, ClimateHistoryState.get(level), fromGameTime, gameTime, dayTime, "history");
         return plan.replayTicks() > threshold ? plan : null;
+    }
+
+    private static ReplayPlan pendingWorkPreemptionPlan(ServerLevel level, LevelChunk chunk, ClimateTickrateChunkStamp stamp,
+                                                        long gameTime, long dayTime, int threshold) {
+        if (!stamp.hasPendingReplay()) {
+            return neutralRandomPreemptionPlan(level, chunk, stamp, gameTime, dayTime, threshold);
+        }
+
+        ClimateTickrateChunkStamp.ReplayAction pendingAction = stamp.pendingReplayAction();
+        if (pendingAction == ClimateTickrateChunkStamp.ReplayAction.NONE) return null;
+
+        long fromGameTime = preemptionFromGameTime(stamp, gameTime);
+        if (gameTime - fromGameTime <= threshold) return null;
+
+        ReplayPlan plan = replayPlanBetween(level, chunk, ClimateHistoryState.get(level), fromGameTime, gameTime, dayTime, "history");
+        ClimateTickrateChunkStamp.ReplayAction newAction = plan.firstReplayAction();
+        if (newAction == ClimateTickrateChunkStamp.ReplayAction.NONE || newAction == pendingAction) return null;
+        return plan.replayTicks(newAction) > threshold ? plan : null;
+    }
+
+    private static long preemptionFromGameTime(ClimateTickrateChunkStamp stamp, long gameTime) {
+        long historyWindow = Math.max(1L, ArcticNightsConfig.tickrateCatchupHistoryWindowTicks.get());
+        long pendingTicks = Math.max(stamp.pendingRandomTicks(), stamp.pendingReplayTicks());
+        long fallbackWindow = Math.min(Math.max(0L, pendingTicks), Math.min(gameTime, historyWindow));
+        long fromGameTime = stamp.pendingHistoryEndGameTime() > 0L
+                ? stamp.pendingHistoryEndGameTime()
+                : Math.max(0L, gameTime - fallbackWindow);
+        return Math.max(fromGameTime, Math.max(0L, gameTime - historyWindow));
+    }
+
+    private static String preemptionSourcePrefix(ClimateTickrateChunkStamp stamp) {
+        ClimateTickrateChunkStamp.ReplayAction action = stamp.pendingReplayAction();
+        if (action == ClimateTickrateChunkStamp.ReplayAction.NONE) {
+            return "preempt_random";
+        }
+        return "preempt_" + action.name().toLowerCase(java.util.Locale.ROOT);
     }
 
     private static ReplayPlan replayPlanBetween(ServerLevel level, LevelChunk chunk, ClimateHistoryState history, long fromGameTime, long toGameTime, long toDayTime, String source) {
@@ -822,6 +854,20 @@ public final class ClimateTickrateCatchup {
             return ClimateTickrateCatchup.replayTicks(replaySegments);
         }
 
+        private ClimateTickrateChunkStamp.ReplayAction firstReplayAction() {
+            return replaySegments.isEmpty()
+                    ? ClimateTickrateChunkStamp.ReplayAction.NONE
+                    : replaySegments.get(0).action();
+        }
+
+        private long replayTicks(ClimateTickrateChunkStamp.ReplayAction action) {
+            if (action == ClimateTickrateChunkStamp.ReplayAction.NONE) return 0L;
+            long ticks = 0L;
+            for (ClimateTickrateChunkStamp.ReplaySegment segment : replaySegments) {
+                if (segment.action() == action) ticks += segment.ticks();
+            }
+            return ticks;
+        }
     }
 
     private record HistoricalClimateReplay(
