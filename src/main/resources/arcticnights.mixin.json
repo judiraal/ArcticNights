@@ -33,7 +33,9 @@
     "sereneseasons.SeasonHooksMixin",
     "weather2.TornadoHelperMixin",
     "weather2.WeatherCommandMixin",
-    "weather2.WeatherObjectParticleStormMixin"
+    "weather2.WeatherObjectParticleStormMixin",
+    "weather2.WeatherUtilBlockMixin",
+    "weather2.WindManagerHeightMixin"
   ],
   "minVersion": "0.8",
   "client": [
