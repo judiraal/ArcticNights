@@ -14,6 +14,10 @@ import java.util.Iterator;
 final class ClimateHistoryState extends SavedData {
     private static final String DATA_NAME = "arcticnights_climate_history";
     private static final String SPANS_KEY = "weather_spans";
+    private static final String START_GAME_TIME_KEY = "start_game_time";
+    private static final String END_GAME_TIME_KEY = "end_game_time";
+    private static final String START_DAY_TIME_KEY = "start_day_time";
+    private static final String END_DAY_TIME_KEY = "end_day_time";
 
     private final Deque<WeatherSpan> weatherSpans = new ArrayDeque<>();
 
@@ -29,38 +33,45 @@ final class ClimateHistoryState extends SavedData {
             CompoundTag spanTag = spans.getCompound(i);
             ClimateSnapshot.WeatherState weather = weatherState(spanTag.getString("state"));
             if (weather == null) continue;
-            long start = spanTag.getLong("start_day_time");
-            long end = spanTag.getLong("end_day_time");
-            if (end < start) continue;
-            state.weatherSpans.addLast(new WeatherSpan(start, end, weather));
+            if (!spanTag.contains(START_GAME_TIME_KEY, Tag.TAG_LONG)
+                    || !spanTag.contains(END_GAME_TIME_KEY, Tag.TAG_LONG)
+                    || !spanTag.contains(START_DAY_TIME_KEY, Tag.TAG_LONG)
+                    || !spanTag.contains(END_DAY_TIME_KEY, Tag.TAG_LONG)) continue;
+            long startGameTime = spanTag.getLong(START_GAME_TIME_KEY);
+            long endGameTime = spanTag.getLong(END_GAME_TIME_KEY);
+            long startDayTime = spanTag.getLong(START_DAY_TIME_KEY);
+            long endDayTime = spanTag.getLong(END_DAY_TIME_KEY);
+            if (endGameTime < startGameTime) continue;
+            state.weatherSpans.addLast(new WeatherSpan(startGameTime, endGameTime, startDayTime, endDayTime, weather));
         }
         return state;
     }
 
     void tick(ServerLevel level, long maxHistoryTicks) {
+        long gameTime = level.getGameTime();
         long dayTime = level.getDayTime();
         ClimateSnapshot.WeatherState current = currentWeather(level);
         WeatherSpan last = weatherSpans.peekLast();
         boolean changed = false;
 
-        if (last != null && dayTime < last.startDayTime()) {
+        if (last != null && gameTime < last.startGameTime()) {
             weatherSpans.clear();
-            weatherSpans.addLast(new WeatherSpan(dayTime, dayTime, current));
+            weatherSpans.addLast(new WeatherSpan(gameTime, gameTime, dayTime, dayTime, current));
             setDirty();
             return;
         }
 
-        if (last != null && dayTime >= last.startDayTime() && last.state() == current) {
+        if (last != null && gameTime >= last.startGameTime() && last.state() == current && isContinuousDayTime(last, gameTime, dayTime)) {
             weatherSpans.removeLast();
-            weatherSpans.addLast(new WeatherSpan(last.startDayTime(), dayTime, current));
-            changed = last.endDayTime() != dayTime;
+            weatherSpans.addLast(new WeatherSpan(last.startGameTime(), gameTime, last.startDayTime(), dayTime, current));
+            changed = last.endGameTime() != gameTime || last.endDayTime() != dayTime;
         } else {
-            weatherSpans.addLast(new WeatherSpan(dayTime, dayTime, current));
+            weatherSpans.addLast(new WeatherSpan(gameTime, gameTime, dayTime, dayTime, current));
             changed = true;
         }
 
-        long keepAfter = dayTime - maxHistoryTicks;
-        while (weatherSpans.size() > 1 && weatherSpans.peekFirst().endDayTime() < keepAfter) {
+        long keepAfter = gameTime - maxHistoryTicks;
+        while (weatherSpans.size() > 1 && weatherSpans.peekFirst().endGameTime() < keepAfter) {
             weatherSpans.removeFirst();
             changed = true;
         }
@@ -68,60 +79,60 @@ final class ClimateHistoryState extends SavedData {
         if (changed) setDirty();
     }
 
-    WeatherSample weatherAt(long dayTime) {
+    WeatherSample weatherAt(long gameTime) {
         Iterator<WeatherSpan> iterator = weatherSpans.descendingIterator();
         while (iterator.hasNext()) {
             WeatherSpan span = iterator.next();
-            if (dayTime >= span.startDayTime() && dayTime <= span.endDayTime()) {
+            if (gameTime >= span.startGameTime() && gameTime <= span.endGameTime()) {
                 return new WeatherSample(span.state(), true);
             }
         }
         return new WeatherSample(ClimateSnapshot.WeatherState.CLEAR, false);
     }
 
-    boolean hasPrecipitationBetween(long fromDayTime, long toDayTime) {
-        return precipitationTicksBetween(fromDayTime, toDayTime) > 0L;
+    boolean hasPrecipitationBetween(long fromGameTime, long toGameTime) {
+        return precipitationTicksBetween(fromGameTime, toGameTime) > 0L;
     }
 
-    long precipitationTicksBetween(long fromDayTime, long toDayTime) {
-        long from = Math.min(fromDayTime, toDayTime);
-        long to = Math.max(fromDayTime, toDayTime);
+    long precipitationTicksBetween(long fromGameTime, long toGameTime) {
+        long from = Math.min(fromGameTime, toGameTime);
+        long to = Math.max(fromGameTime, toGameTime);
         long ticks = 0L;
         Iterator<WeatherSpan> iterator = weatherSpans.descendingIterator();
         while (iterator.hasNext()) {
             WeatherSpan span = iterator.next();
-            if (span.endDayTime() < from) break;
-            if (span.startDayTime() > to) continue;
+            if (span.endGameTime() < from) break;
+            if (span.startGameTime() > to) continue;
             if (!isPrecipitating(span.state())) continue;
-            long overlapStart = Math.max(from, span.startDayTime());
-            long overlapEnd = Math.min(to, span.endDayTime());
+            long overlapStart = Math.max(from, span.startGameTime());
+            long overlapEnd = Math.min(to, span.endGameTime());
             ticks += Math.max(0L, overlapEnd - overlapStart);
         }
         return ticks;
     }
 
-    void visitSpansBetween(long fromDayTime, long toDayTime, WeatherSpanVisitor visitor) {
-        long from = Math.min(fromDayTime, toDayTime);
-        long to = Math.max(fromDayTime, toDayTime);
+    void visitSpansBetween(long fromGameTime, long toGameTime, WeatherSpanVisitor visitor) {
+        long from = Math.min(fromGameTime, toGameTime);
+        long to = Math.max(fromGameTime, toGameTime);
         for (WeatherSpan span : weatherSpans) {
-            if (span.endDayTime() < from || span.startDayTime() > to) continue;
-            long overlapStart = Math.max(from, span.startDayTime());
-            long overlapEnd = Math.min(to, span.endDayTime());
+            if (span.endGameTime() < from || span.startGameTime() > to) continue;
+            long overlapStart = Math.max(from, span.startGameTime());
+            long overlapEnd = Math.min(to, span.endGameTime());
             if (overlapEnd <= overlapStart) continue;
-            visitor.accept(overlapStart, overlapEnd, span.state());
+            visitor.accept(overlapStart, overlapEnd, span.sampleDayTime(overlapStart, overlapEnd), span.state());
         }
     }
 
-    String debugWindow(long fromDayTime, long toDayTime) {
-        long from = Math.min(fromDayTime, toDayTime);
-        long to = Math.max(fromDayTime, toDayTime);
+    String debugWindow(long fromGameTime, long toGameTime) {
+        long from = Math.min(fromGameTime, toGameTime);
+        long to = Math.max(fromGameTime, toGameTime);
         int overlaps = 0;
         boolean precipitating = false;
         WeatherSpan first = null;
         WeatherSpan last = null;
 
         for (WeatherSpan span : weatherSpans) {
-            if (span.endDayTime() < from || span.startDayTime() > to) continue;
+            if (span.endGameTime() < from || span.startGameTime() > to) continue;
             overlaps++;
             if (first == null) first = span;
             last = span;
@@ -130,7 +141,7 @@ final class ClimateHistoryState extends SavedData {
 
         WeatherSample atEnd = weatherAt(to);
         return "spans=" + weatherSpans.size()
-                + ", window=" + from + ".." + to
+                + ", gameWindow=" + from + ".." + to
                 + ", overlap=" + overlaps
                 + ", precip=" + precipitating
                 + ", precipTicks=" + precipitationTicksBetween(from, to)
@@ -139,11 +150,11 @@ final class ClimateHistoryState extends SavedData {
                 + ", last=" + spanSummary(last);
     }
 
-    void replaceWithDebugSpan(long startDayTime, long endDayTime, ClimateSnapshot.WeatherState state) {
-        long start = Math.min(startDayTime, endDayTime);
-        long end = Math.max(startDayTime, endDayTime);
+    void replaceWithDebugSpan(long startGameTime, long endGameTime, ClimateSnapshot.WeatherState state) {
+        long start = Math.min(startGameTime, endGameTime);
+        long end = Math.max(startGameTime, endGameTime);
         weatherSpans.clear();
-        weatherSpans.addLast(new WeatherSpan(start, end, state));
+        weatherSpans.addLast(new WeatherSpan(start, end, start, end, state));
         setDirty();
     }
 
@@ -158,13 +169,21 @@ final class ClimateHistoryState extends SavedData {
         ListTag spans = new ListTag();
         for (WeatherSpan span : weatherSpans) {
             CompoundTag spanTag = new CompoundTag();
-            spanTag.putLong("start_day_time", span.startDayTime());
-            spanTag.putLong("end_day_time", span.endDayTime());
+            spanTag.putLong(START_GAME_TIME_KEY, span.startGameTime());
+            spanTag.putLong(END_GAME_TIME_KEY, span.endGameTime());
+            spanTag.putLong(START_DAY_TIME_KEY, span.startDayTime());
+            spanTag.putLong(END_DAY_TIME_KEY, span.endDayTime());
             spanTag.putString("state", span.state().name());
             spans.add(spanTag);
         }
         tag.put(SPANS_KEY, spans);
         return tag;
+    }
+
+    private static boolean isContinuousDayTime(WeatherSpan last, long gameTime, long dayTime) {
+        long gameElapsed = Math.max(0L, gameTime - last.endGameTime());
+        long dayElapsed = dayTime - last.endDayTime();
+        return dayElapsed >= 0L && dayElapsed <= gameElapsed + 1L;
     }
 
     private static boolean isPrecipitating(ClimateSnapshot.WeatherState state) {
@@ -173,7 +192,9 @@ final class ClimateHistoryState extends SavedData {
 
     private static String spanSummary(WeatherSpan span) {
         if (span == null) return "none";
-        return span.state().name() + "[" + span.startDayTime() + ".." + span.endDayTime() + "]";
+        return span.state().name()
+                + "[game=" + span.startGameTime() + ".." + span.endGameTime()
+                + ",day=" + span.startDayTime() + ".." + span.endDayTime() + "]";
     }
 
     private static ClimateSnapshot.WeatherState weatherState(String name) {
@@ -188,9 +209,15 @@ final class ClimateHistoryState extends SavedData {
     }
 
     interface WeatherSpanVisitor {
-        void accept(long startDayTime, long endDayTime, ClimateSnapshot.WeatherState state);
+        void accept(long startGameTime, long endGameTime, long sampleDayTime, ClimateSnapshot.WeatherState state);
     }
 
-    private record WeatherSpan(long startDayTime, long endDayTime, ClimateSnapshot.WeatherState state) {
+    private record WeatherSpan(long startGameTime, long endGameTime, long startDayTime, long endDayTime, ClimateSnapshot.WeatherState state) {
+        private long sampleDayTime(long overlapStartGameTime, long overlapEndGameTime) {
+            long spanTicks = Math.max(1L, endGameTime - startGameTime);
+            long overlapMidpoint = overlapStartGameTime + Math.max(0L, overlapEndGameTime - overlapStartGameTime) / 2L;
+            double progress = Math.max(0.0D, Math.min(1.0D, (overlapMidpoint - startGameTime) / (double) spanTicks));
+            return Math.max(0L, Math.round(startDayTime + (endDayTime - startDayTime) * progress));
+        }
     }
 }

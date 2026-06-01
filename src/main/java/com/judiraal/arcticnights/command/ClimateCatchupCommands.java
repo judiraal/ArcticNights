@@ -180,6 +180,7 @@ public final class ClimateCatchupCommands {
                         + ", pendingRandomTicks=" + value.pendingRandomTicks()
                         + ", pendingRandomDay=" + value.pendingRandomDayTime()
                         + ", pendingRandomWeather=" + value.pendingRandomWeather()
+                        + ", pendingHistory=" + value.pendingHistoryStartGameTime() + ".." + value.pendingHistoryEndGameTime()
                         + ", pendingAction=" + value.pendingReplayAction()
                         + ", pendingTicks=" + value.pendingReplayTicks()
                         + ", pendingSegments=" + value.pendingReplaySegments()

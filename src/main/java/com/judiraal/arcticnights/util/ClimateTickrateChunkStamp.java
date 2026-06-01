@@ -17,6 +17,8 @@ public final class ClimateTickrateChunkStamp implements INBTSerializable<Compoun
     private long pendingRandomTicks;
     private ClimateSnapshot.WeatherState pendingRandomWeather = ClimateSnapshot.WeatherState.CLEAR;
     private long pendingRandomDayTime;
+    private long pendingHistoryStartGameTime;
+    private long pendingHistoryEndGameTime;
     private final ArrayDeque<ReplaySegment> pendingReplaySegments = new ArrayDeque<>();
 
     public ClimateTickrateChunkStamp() {
@@ -59,6 +61,14 @@ public final class ClimateTickrateChunkStamp implements INBTSerializable<Compoun
 
     public long pendingRandomDayTime() {
         return pendingRandomDayTime;
+    }
+
+    public long pendingHistoryStartGameTime() {
+        return pendingHistoryStartGameTime;
+    }
+
+    public long pendingHistoryEndGameTime() {
+        return pendingHistoryEndGameTime;
     }
 
     public ReplayAction pendingReplayAction() {
@@ -119,15 +129,22 @@ public final class ClimateTickrateChunkStamp implements INBTSerializable<Compoun
         pendingReplaySegments.addLast(new ReplaySegment(action, Math.max(0L, ticks), weather, Math.max(0L, dayTime)));
     }
 
-    public void setPendingPlan(long randomTicks, ClimateSnapshot.WeatherState randomWeather, long randomDayTime, List<ReplaySegment> replaySegments) {
+    public void setPendingPlan(long randomTicks, ClimateSnapshot.WeatherState randomWeather, long randomDayTime,
+                               List<ReplaySegment> replaySegments, long historyStartGameTime, long historyEndGameTime) {
         pendingRandomTicks = Math.max(0L, randomTicks);
         pendingRandomWeather = randomWeather == null ? ClimateSnapshot.WeatherState.CLEAR : randomWeather;
         pendingRandomDayTime = Math.max(0L, randomDayTime);
+        pendingHistoryStartGameTime = Math.max(0L, Math.min(historyStartGameTime, historyEndGameTime));
+        pendingHistoryEndGameTime = Math.max(pendingHistoryStartGameTime, Math.max(0L, historyEndGameTime));
         pendingReplaySegments.clear();
         for (ReplaySegment segment : replaySegments) {
             if (segment.action() != ReplayAction.NONE && segment.ticks() > 0L) {
                 pendingReplaySegments.addLast(segment.normalized());
             }
+        }
+        if (!hasPendingWork()) {
+            pendingHistoryStartGameTime = 0L;
+            pendingHistoryEndGameTime = 0L;
         }
     }
 
@@ -154,6 +171,8 @@ public final class ClimateTickrateChunkStamp implements INBTSerializable<Compoun
         pendingRandomTicks = 0L;
         pendingRandomWeather = ClimateSnapshot.WeatherState.CLEAR;
         pendingRandomDayTime = 0L;
+        pendingHistoryStartGameTime = 0L;
+        pendingHistoryEndGameTime = 0L;
         clearPendingReplay();
     }
 
@@ -180,6 +199,10 @@ public final class ClimateTickrateChunkStamp implements INBTSerializable<Compoun
             tag.putString("pendingRandomWeather", pendingRandomWeather.name());
             tag.putLong("pendingRandomDayTime", pendingRandomDayTime);
         }
+        if (hasPendingWork()) {
+            tag.putLong("pendingHistoryStartGameTime", pendingHistoryStartGameTime);
+            tag.putLong("pendingHistoryEndGameTime", pendingHistoryEndGameTime);
+        }
         if (hasPendingReplay()) {
             ListTag segments = new ListTag();
             for (ReplaySegment segment : pendingReplaySegments) {
@@ -204,6 +227,8 @@ public final class ClimateTickrateChunkStamp implements INBTSerializable<Compoun
         pendingRandomTicks = Math.max(0L, tag.getLong("pendingRandomTicks"));
         pendingRandomWeather = weatherState(tag.getString("pendingRandomWeather"));
         pendingRandomDayTime = Math.max(0L, tag.getLong("pendingRandomDayTime"));
+        pendingHistoryStartGameTime = Math.max(0L, tag.getLong("pendingHistoryStartGameTime"));
+        pendingHistoryEndGameTime = Math.max(pendingHistoryStartGameTime, tag.getLong("pendingHistoryEndGameTime"));
         if (pendingRandomTicks <= 0L) {
             pendingRandomWeather = ClimateSnapshot.WeatherState.CLEAR;
             pendingRandomDayTime = 0L;
@@ -229,6 +254,10 @@ public final class ClimateTickrateChunkStamp implements INBTSerializable<Compoun
                         weatherState(tag.getString("pendingReplayWeather")),
                         Math.max(0L, tag.getLong("pendingReplayDayTime"))));
             }
+        }
+        if (!hasPendingWork()) {
+            pendingHistoryStartGameTime = 0L;
+            pendingHistoryEndGameTime = 0L;
         }
     }
 

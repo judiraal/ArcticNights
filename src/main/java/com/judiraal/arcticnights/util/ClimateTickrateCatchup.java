@@ -87,10 +87,10 @@ public final class ClimateTickrateCatchup {
     }
 
     public static String historyDebug(ServerLevel level, long windowTicks) {
-        long dayTime = level.getDayTime();
+        long gameTime = level.getGameTime();
         long window = Math.max(1L, windowTicks);
-        long fromDayTime = Math.max(0L, dayTime - window);
-        return ClimateHistoryState.get(level).debugWindow(fromDayTime, dayTime);
+        long fromGameTime = Math.max(0L, gameTime - window);
+        return ClimateHistoryState.get(level).debugWindow(fromGameTime, gameTime);
     }
 
     public static int reset(ServerLevel level, ChunkPos center, int radius) {
@@ -124,7 +124,8 @@ public final class ClimateTickrateCatchup {
             replayPlan = newChunkReplayPlan(level, chunk, gameTime, dayTime);
             stamp = new ClimateTickrateChunkStamp(gameTime, gameTime, 0);
             stamp.setPendingPlan(replayPlan.randomTickDebtTicks(), replayPlan.randomWeatherState(),
-                    replayPlan.randomDayTime(), replayPlan.replaySegments());
+                    replayPlan.randomDayTime(), replayPlan.replaySegments(),
+                    replayPlan.historyStartGameTime(), replayPlan.historyEndGameTime());
             source = replayPlan.source("new");
         } else {
             stamp = chunk.getData(attachmentType);
@@ -145,13 +146,22 @@ public final class ClimateTickrateCatchup {
         }
 
         long elapsed = gameTime - lastApplied;
+        ReplayPlan preemptPlan = neutralRandomPreemptionPlan(level, chunk, stamp, gameTime, dayTime, threshold);
+        if (preemptPlan != null) {
+            stamp.setPendingPlan(preemptPlan.replayTicks(), preemptPlan.randomWeatherState(),
+                    preemptPlan.randomDayTime(), preemptPlan.replaySegments(),
+                    preemptPlan.historyStartGameTime(), preemptPlan.historyEndGameTime());
+            source = preemptPlan.source("preempt_random");
+        }
+
         if (!stamp.hasPendingWork() && elapsed > threshold) {
             ReplayPlan elapsedReplayPlan = replayPlan != null
                     ? replayPlan
-                    : elapsedReplayPlan(level, chunk, ClimateHistoryState.get(level), dayTime, elapsed);
+                    : elapsedReplayPlan(level, chunk, ClimateHistoryState.get(level), gameTime, dayTime, elapsed);
             if (elapsedReplayPlan.hasWork()) {
                 stamp.setPendingPlan(elapsedReplayPlan.randomTickDebtTicks(), elapsedReplayPlan.randomWeatherState(),
-                        elapsedReplayPlan.randomDayTime(), elapsedReplayPlan.replaySegments());
+                        elapsedReplayPlan.randomDayTime(), elapsedReplayPlan.replaySegments(),
+                        elapsedReplayPlan.historyStartGameTime(), elapsedReplayPlan.historyEndGameTime());
             }
             source = elapsedReplayPlan.source("");
         }
@@ -329,52 +339,70 @@ public final class ClimateTickrateCatchup {
         }
 
         long maxWindow = Math.min(gameTime, ArcticNightsConfig.tickrateCatchupHistoryWindowTicks.get());
-        long window = Math.min(maxWindow, Math.max(0L, dayTime));
+        long window = Math.max(0L, maxWindow);
         if (window <= 0L) {
             return ReplayPlan.zero("no_history");
         }
 
-        long fromDayTime = Math.max(0L, dayTime - window);
-        return replayPlanBetween(level, chunk, ClimateHistoryState.get(level), fromDayTime, dayTime, "history");
+        long fromGameTime = Math.max(0L, gameTime - window);
+        return replayPlanBetween(level, chunk, ClimateHistoryState.get(level), fromGameTime, gameTime, dayTime, "history");
     }
 
-    private static ReplayPlan elapsedReplayPlan(ServerLevel level, LevelChunk chunk, ClimateHistoryState history, long dayTime, long elapsed) {
-        long window = Math.min(Math.min(elapsed, ArcticNightsConfig.tickrateCatchupHistoryWindowTicks.get()), Math.max(1L, dayTime));
-        long fromDayTime = Math.max(0L, dayTime - window);
-        return replayPlanBetween(level, chunk, history, fromDayTime, dayTime, "history");
+    private static ReplayPlan elapsedReplayPlan(ServerLevel level, LevelChunk chunk, ClimateHistoryState history, long gameTime, long dayTime, long elapsed) {
+        long window = Math.min(Math.min(elapsed, ArcticNightsConfig.tickrateCatchupHistoryWindowTicks.get()), Math.max(1L, gameTime));
+        long fromGameTime = Math.max(0L, gameTime - window);
+        return replayPlanBetween(level, chunk, history, fromGameTime, gameTime, dayTime, "history");
     }
 
-    private static ReplayPlan replayPlanBetween(ServerLevel level, LevelChunk chunk, ClimateHistoryState history, long fromDayTime, long toDayTime, String source) {
-        long from = Math.min(fromDayTime, toDayTime);
-        long to = Math.max(fromDayTime, toDayTime);
+    private static ReplayPlan neutralRandomPreemptionPlan(ServerLevel level, LevelChunk chunk, ClimateTickrateChunkStamp stamp,
+                                                         long gameTime, long dayTime, int threshold) {
+        if (stamp.hasPendingReplay()) return null;
+        if (stamp.pendingRandomTicks() <= 0L) return null;
+        if (stamp.pendingRandomWeather() != ClimateSnapshot.WeatherState.CLEAR) return null;
+
+        long historyWindow = Math.max(1L, ArcticNightsConfig.tickrateCatchupHistoryWindowTicks.get());
+        long fallbackWindow = Math.min(Math.max(0L, stamp.pendingRandomTicks()), Math.min(gameTime, historyWindow));
+        long fromGameTime = stamp.pendingHistoryEndGameTime() > 0L
+                ? stamp.pendingHistoryEndGameTime()
+                : Math.max(0L, gameTime - fallbackWindow);
+        fromGameTime = Math.max(fromGameTime, Math.max(0L, gameTime - historyWindow));
+        if (gameTime - fromGameTime <= threshold) return null;
+
+        ReplayPlan plan = replayPlanBetween(level, chunk, ClimateHistoryState.get(level), fromGameTime, gameTime, dayTime, "history");
+        return plan.replayTicks() > threshold ? plan : null;
+    }
+
+    private static ReplayPlan replayPlanBetween(ServerLevel level, LevelChunk chunk, ClimateHistoryState history, long fromGameTime, long toGameTime, long toDayTime, String source) {
+        long from = Math.min(fromGameTime, toGameTime);
+        long to = Math.max(fromGameTime, toGameTime);
         long window = Math.max(0L, to - from);
         if (window <= 0L) return ReplayPlan.zero(source);
 
         LocalClimateSamples samples = LocalClimateSamples.of(level, chunk);
-        ReplayPlanBuilder builder = new ReplayPlanBuilder(window, source, to);
+        ReplayPlanBuilder builder = new ReplayPlanBuilder(window, source, toDayTime, from, to);
         long[] cursor = {from};
-        history.visitSpansBetween(from, to, (start, end, weatherState) -> {
+        history.visitSpansBetween(from, to, (start, end, sampleDayTime, weatherState) -> {
             if (start > cursor[0]) {
-                addWeatherSpanToReplayPlan(level, samples, builder, cursor[0], start, ClimateSnapshot.WeatherState.CLEAR);
+                addWeatherSpanToReplayPlan(level, samples, builder, cursor[0], start,
+                        estimateDayTime(toGameTime, toDayTime, cursor[0], start), ClimateSnapshot.WeatherState.CLEAR);
             }
             long spanStart = Math.max(start, cursor[0]);
             if (end > spanStart) {
-                addWeatherSpanToReplayPlan(level, samples, builder, spanStart, end, weatherState);
+                addWeatherSpanToReplayPlan(level, samples, builder, spanStart, end, sampleDayTime, weatherState);
             }
             cursor[0] = Math.max(cursor[0], end);
         });
         if (cursor[0] < to) {
-            addWeatherSpanToReplayPlan(level, samples, builder, cursor[0], to, ClimateSnapshot.WeatherState.CLEAR);
+            addWeatherSpanToReplayPlan(level, samples, builder, cursor[0], to,
+                    estimateDayTime(toGameTime, toDayTime, cursor[0], to), ClimateSnapshot.WeatherState.CLEAR);
         }
         return builder.finish();
     }
 
     private static void addWeatherSpanToReplayPlan(ServerLevel level, LocalClimateSamples samples, ReplayPlanBuilder builder,
-                                                   long start, long end, ClimateSnapshot.WeatherState weatherState) {
-        long duration = Math.max(0L, end - start);
+                                                   long startGameTime, long endGameTime, long sampleDayTime, ClimateSnapshot.WeatherState weatherState) {
+        long duration = Math.max(0L, endGameTime - startGameTime);
         if (duration <= 0L) return;
-
-        long sampleDayTime = start + duration / 2L;
         builder.addRandomSpan(duration, sampleDayTime, weatherState);
 
         double snowFactor = 0.0D;
@@ -415,6 +443,11 @@ public final class ClimateTickrateCatchup {
         } else if (meltTicks > snowTicks) {
             builder.addAction(ClimateTickrateChunkStamp.ReplayAction.MELT, actionTicks, sampleDayTime, weatherState);
         }
+    }
+
+    private static long estimateDayTime(long toGameTime, long toDayTime, long startGameTime, long endGameTime) {
+        long midpoint = startGameTime + Math.max(0L, endGameTime - startGameTime) / 2L;
+        return Math.max(0L, toDayTime - Math.max(0L, toGameTime - midpoint));
     }
 
     private static void recordResult(RuntimeState runtime, TickResult result) {
@@ -527,12 +560,16 @@ public final class ClimateTickrateCatchup {
         private final long windowTicks;
         private final String source;
         private final long fallbackDayTime;
+        private final long historyStartGameTime;
+        private final long historyEndGameTime;
         private final ArrayList<ClimateTickrateChunkStamp.ReplaySegment> replaySegments = new ArrayList<>();
         private final ArrayList<RandomSpan> randomSpans = new ArrayList<>();
-        private ReplayPlanBuilder(long windowTicks, String source, long fallbackDayTime) {
+        private ReplayPlanBuilder(long windowTicks, String source, long fallbackDayTime, long historyStartGameTime, long historyEndGameTime) {
             this.windowTicks = Math.max(0L, windowTicks);
             this.source = source;
             this.fallbackDayTime = Math.max(0L, fallbackDayTime);
+            this.historyStartGameTime = Math.max(0L, Math.min(historyStartGameTime, historyEndGameTime));
+            this.historyEndGameTime = Math.max(this.historyStartGameTime, Math.max(0L, historyEndGameTime));
         }
 
         private void addRandomSpan(long ticks, long dayTime, ClimateSnapshot.WeatherState weatherState) {
@@ -555,7 +592,8 @@ public final class ClimateTickrateCatchup {
             long randomTickDebt = Math.min(windowTicks, ArcticNightsConfig.tickrateCatchupMaxRandomTickDebtTicks.get());
             randomTickDebt = Math.max(randomTickDebt, replayTicks);
             RandomClimate randomClimate = randomClimate(randomTickDebt);
-            return new ReplayPlan(source, randomTickDebt, randomClimate.weatherState(), randomClimate.dayTime(), trimmedSegments);
+            return new ReplayPlan(source, randomTickDebt, randomClimate.weatherState(), randomClimate.dayTime(),
+                    trimmedSegments, historyStartGameTime, historyEndGameTime);
         }
 
         private RandomClimate randomClimate(long ticks) {
@@ -757,10 +795,12 @@ public final class ClimateTickrateCatchup {
             long randomTickDebtTicks,
             ClimateSnapshot.WeatherState randomWeatherState,
             long randomDayTime,
-            List<ClimateTickrateChunkStamp.ReplaySegment> replaySegments
+            List<ClimateTickrateChunkStamp.ReplaySegment> replaySegments,
+            long historyStartGameTime,
+            long historyEndGameTime
     ) {
         private static ReplayPlan zero(String source) {
-            return new ReplayPlan(source, 0L, ClimateSnapshot.WeatherState.CLEAR, 0L, List.of());
+            return new ReplayPlan(source, 0L, ClimateSnapshot.WeatherState.CLEAR, 0L, List.of(), 0L, 0L);
         }
 
         private boolean hasWork() {
@@ -777,6 +817,11 @@ public final class ClimateTickrateCatchup {
             }
             return normalizedPrefix + source;
         }
+
+        private long replayTicks() {
+            return ClimateTickrateCatchup.replayTicks(replaySegments);
+        }
+
     }
 
     private record HistoricalClimateReplay(
