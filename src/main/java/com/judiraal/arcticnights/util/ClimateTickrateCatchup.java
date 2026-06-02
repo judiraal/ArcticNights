@@ -37,6 +37,7 @@ public final class ClimateTickrateCatchup {
     private static final String SOURCE_STAMP_ELAPSED = "stamp_elapsed";
     private static final Map<ServerLevel, RuntimeState> RUNTIME = new WeakHashMap<>();
     private static final ThreadLocal<HistoricalClimateReplay> HISTORICAL_CLIMATE_REPLAY = new ThreadLocal<>();
+    private static final ThreadLocal<ActiveTick> ACTIVE_TICK = new ThreadLocal<>();
 
     private ClimateTickrateCatchup() {
     }
@@ -60,18 +61,50 @@ public final class ClimateTickrateCatchup {
         RUNTIME.clear();
     }
 
-    public static void tickVanillaChunk(ServerLevel level, LevelChunk chunk, int baseRandomTickSpeed) {
+    public static int beginVanillaChunkTick(ServerLevel level, LevelChunk chunk, int baseRandomTickSpeed) {
+        clearActiveTick();
         if (!shouldTrack(level)) {
-            level.tickChunk(chunk, baseRandomTickSpeed);
-            return;
+            return baseRandomTickSpeed;
         }
 
         RuntimeState runtime = runtime(level);
         runtime.beginTick(level.getGameTime());
-        TickResult result = tickWithCatchupPlan(level, chunk, Math.max(0, baseRandomTickSpeed), runtime);
-        if (result != null) {
-            recordResult(runtime, result);
-            debugResult(level, result, runtime);
+        int effectiveBaseRandomTickSpeed = Math.max(0, baseRandomTickSpeed);
+        TickDecision decision = tickWithCatchupPlan(level, chunk, effectiveBaseRandomTickSpeed, runtime);
+        if (decision == null) {
+            return effectiveBaseRandomTickSpeed;
+        }
+        if (decision.result() != null) {
+            ActiveTick activeTick = new ActiveTick(level, chunk, runtime, decision.stamp(), decision.result(), decision.burst());
+            ACTIVE_TICK.set(activeTick);
+            HistoricalClimateReplay replay = replayFor(level, decision.result());
+            if (replay != null) {
+                HISTORICAL_CLIMATE_REPLAY.set(replay);
+            }
+        }
+        return decision.randomTickSpeed();
+    }
+
+    public static void finishVanillaChunkTick(ServerLevel level, LevelChunk chunk) {
+        ActiveTick activeTick = ACTIVE_TICK.get();
+        if (activeTick == null || activeTick.level() != level || activeTick.chunk() != chunk) {
+            clearActiveTick();
+            return;
+        }
+
+        try {
+            TickResult result = activeTick.result();
+            if (activeTick.burst() && activeTick.stamp() != null) {
+                MachineCatchupBridge.tickSupportedBlockEntities(level, chunk, result);
+                activeTick.stamp().consumePendingWork(result.appliedTicks());
+                int burstTicks = activeTick.stamp().hasPendingWork() ? result.burstTicks() : 0;
+                long gameTime = level.getGameTime();
+                applyPlan(chunk, activeTick.stamp(), gameTime, gameTime, burstTicks, gameTime);
+            }
+            recordResult(activeTick.runtime(), result);
+            debugResult(level, result, activeTick.runtime());
+        } finally {
+            clearActiveTick();
         }
     }
 
@@ -110,7 +143,7 @@ public final class ClimateTickrateCatchup {
         return reset;
     }
 
-    private static TickResult tickWithCatchupPlan(ServerLevel level, LevelChunk chunk, int baseRandomTickSpeed, RuntimeState runtime) {
+    private static TickDecision tickWithCatchupPlan(ServerLevel level, LevelChunk chunk, int baseRandomTickSpeed, RuntimeState runtime) {
         ChunkPos pos = chunk.getPos();
         long gameTime = level.getGameTime();
         long dayTime = level.getDayTime();
@@ -139,10 +172,9 @@ public final class ClimateTickrateCatchup {
         long lastApplied = stamp.lastAppliedGameTime();
         if (gameTime < lastApplied) {
             TickResult result = TickResult.reset(pos, "time_rewind", baseRandomTickSpeed);
-            level.tickChunk(chunk, baseRandomTickSpeed);
             stamp.clearPendingWork();
             applyPlan(chunk, stamp, gameTime, gameTime, 0);
-            return result;
+            return TickDecision.vanilla(baseRandomTickSpeed, result);
         }
 
         long elapsed = gameTime - lastApplied;
@@ -172,7 +204,6 @@ public final class ClimateTickrateCatchup {
         long debt = Math.max(randomDebt, replayDebt);
         if (debt <= threshold) {
             boolean shouldPersist = newStamp || debt >= Math.max(1, threshold);
-            level.tickChunk(chunk, baseRandomTickSpeed);
             if (stamp.hasPendingWork()) {
                 stamp.clearPendingWork();
                 shouldPersist = true;
@@ -182,35 +213,33 @@ public final class ClimateTickrateCatchup {
             if (shouldPersist) {
                 applyPlan(chunk, stamp, gameTime, gameTime, 0);
             }
-            return elapsed > threshold ? TickResult.skipped(pos, "no_action", 0L, baseRandomTickSpeed, 0L, source) : null;
+            if (elapsed <= threshold) return null;
+            return TickDecision.vanilla(baseRandomTickSpeed,
+                    TickResult.skipped(pos, "no_action", 0L, baseRandomTickSpeed, 0L, source));
         }
 
         if (stamp.burstTicks() >= ArcticNightsConfig.tickrateCatchupMaxBurstTicks.get()) {
             TickResult result = TickResult.skipped(pos, "max_duration", debt, baseRandomTickSpeed, 0L, source);
-            level.tickChunk(chunk, baseRandomTickSpeed);
             applyPlan(chunk, stamp, gameTime, gameTime, 0);
-            return result;
+            return TickDecision.vanilla(baseRandomTickSpeed, result);
         }
 
         if (baseRandomTickSpeed <= 0) {
             TickResult result = TickResult.skipped(pos, "random_tick_disabled", debt, baseRandomTickSpeed, 0L, source);
-            level.tickChunk(chunk, baseRandomTickSpeed);
             applyPlan(chunk, stamp, gameTime, gameTime, stamp.burstTicks());
-            return result;
+            return TickDecision.vanilla(baseRandomTickSpeed, result);
         }
 
         if (!runtime.shouldBurstThisTick(level, pos, stamp, gameTime)) {
             TickResult result = TickResult.skipped(pos, "fairness", debt, baseRandomTickSpeed, 0L, source);
-            level.tickChunk(chunk, baseRandomTickSpeed);
             applyPlan(chunk, stamp, gameTime, gameTime, stamp.burstTicks());
-            return result;
+            return TickDecision.vanilla(baseRandomTickSpeed, result);
         }
 
         if (!runtime.claimBurstChunk()) {
             TickResult result = TickResult.skipped(pos, "budget", debt, baseRandomTickSpeed, 0L, source);
-            level.tickChunk(chunk, baseRandomTickSpeed);
             applyPlan(chunk, stamp, gameTime, gameTime, stamp.burstTicks());
-            return result;
+            return TickDecision.vanilla(baseRandomTickSpeed, result);
         }
 
         ClimateTickrateChunkStamp.ReplaySegment replaySegment = stamp.pendingReplaySegment();
@@ -226,14 +255,7 @@ public final class ClimateTickrateCatchup {
         Exposure exposure = Exposure.pending(stamp, replaySegment);
         TickResult result = TickResult.burst(pos, debt, multiplier, baseRandomTickSpeed, effectiveRandomTickSpeed,
                 appliedTicks, burstTicks, exposure, source);
-        runWithHistoricalClimateReplay(level, result, () -> level.tickChunk(chunk, effectiveRandomTickSpeed));
-        MachineCatchupBridge.tickSupportedBlockEntities(level, chunk, result);
-        stamp.consumePendingWork(appliedTicks);
-        if (!stamp.hasPendingWork()) {
-            burstTicks = 0;
-        }
-        applyPlan(chunk, stamp, gameTime, gameTime, burstTicks, gameTime);
-        return result;
+        return TickDecision.burst(effectiveRandomTickSpeed, stamp, result);
     }
 
     public static boolean isReplayingHistoricalPrecipitation(ServerLevel level) {
@@ -258,15 +280,15 @@ public final class ClimateTickrateCatchup {
     public static float historicalOutdoorMinecraftTemperature(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky) {
         HistoricalClimateReplay replay = historicalReplay(level);
         if (replay == null) return ClimateService.outdoorMinecraftTemperature(level, biome, pos, exposedToSky);
-        return ClimateService.sampleSnapshot(level, biome, pos, exposedToSky, replay.weatherState(), replay.dayTime())
-                .outdoorMinecraftTemperature();
+        return ClimateService.sampleOutdoorMinecraftTemperature(level, biome, pos,
+                exposedToSky, replay.weatherState(), replay.dayTime());
     }
 
     public static ClimateSnapshot.SnowBehavior historicalSnowBehavior(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky) {
         HistoricalClimateReplay replay = historicalReplay(level);
         if (replay == null) return ClimateService.snowBehaviorAt(level, biome, pos);
-        return ClimateService.sampleSnapshot(level, biome, pos, exposedToSky, replay.weatherState(), replay.dayTime())
-                .snowBehavior();
+        return ClimateService.snowBehavior(ClimateService.sampleOutdoorMinecraftTemperature(level, biome, pos,
+                exposedToSky, replay.weatherState(), replay.dayTime()));
     }
 
     private static HistoricalClimateReplay historicalReplay(ServerLevel level) {
@@ -274,24 +296,9 @@ public final class ClimateTickrateCatchup {
         return replay != null && replay.level() == level ? replay : null;
     }
 
-    private static void runWithHistoricalClimateReplay(ServerLevel level, TickResult result, Runnable task) {
-        HistoricalClimateReplay replay = replayFor(level, result);
-        if (replay == null) {
-            task.run();
-            return;
-        }
-
-        HistoricalClimateReplay previous = HISTORICAL_CLIMATE_REPLAY.get();
-        HISTORICAL_CLIMATE_REPLAY.set(replay);
-        try {
-            task.run();
-        } finally {
-            if (previous == null) {
-                HISTORICAL_CLIMATE_REPLAY.remove();
-            } else {
-                HISTORICAL_CLIMATE_REPLAY.set(previous);
-            }
-        }
+    private static void clearActiveTick() {
+        ACTIVE_TICK.remove();
+        HISTORICAL_CLIMATE_REPLAY.remove();
     }
 
     private static HistoricalClimateReplay replayFor(ServerLevel level, TickResult result) {
@@ -440,16 +447,16 @@ public final class ClimateTickrateCatchup {
         double snowFactor = 0.0D;
         double meltFactor = 0.0D;
         for (LocalClimateSample sample : samples.samples()) {
-            ClimateSnapshot snapshot = ClimateService.sampleSnapshot(level, sample.biome(), sample.pos(), true, weatherState, sampleDayTime);
-            double sampleSnowFactor = weatherState == ClimateSnapshot.WeatherState.CLEAR
+            float outdoorTemperature = ClimateService.sampleOutdoorMinecraftTemperature(level,
+                    sample.biome(), sample.pos(), true, weatherState, sampleDayTime);
+            double accumulationFactor = ClimateService.snowAccumulationFactor(outdoorTemperature);
+            boolean hasPrecipitation = sample.biome().value().hasPrecipitation();
+            double sampleSnowFactor = weatherState == ClimateSnapshot.WeatherState.CLEAR || !hasPrecipitation
                     ? 0.0D
-                    : ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
-            double sampleMeltFactor = 1.0D - ClimateService.snowAccumulationFactor(snapshot.outdoorMinecraftTemperature());
-
-            if (snapshot.precipitationKind() == ClimateSnapshot.PrecipitationKind.NONE) {
-                sampleSnowFactor = 0.0D;
-                if (weatherState != ClimateSnapshot.WeatherState.CLEAR) sampleMeltFactor = 0.0D;
-            }
+                    : accumulationFactor;
+            double sampleMeltFactor = !hasPrecipitation && weatherState != ClimateSnapshot.WeatherState.CLEAR
+                    ? 0.0D
+                    : 1.0D - accumulationFactor;
 
             snowFactor += sampleSnowFactor;
             meltFactor += sampleMeltFactor;
@@ -708,6 +715,26 @@ public final class ClimateTickrateCatchup {
             ticks += segment.ticks();
         }
         return ticks;
+    }
+
+    private record TickDecision(int randomTickSpeed, ClimateTickrateChunkStamp stamp, TickResult result, boolean burst) {
+        private static TickDecision vanilla(int randomTickSpeed, TickResult result) {
+            return new TickDecision(randomTickSpeed, null, result, false);
+        }
+
+        private static TickDecision burst(int randomTickSpeed, ClimateTickrateChunkStamp stamp, TickResult result) {
+            return new TickDecision(randomTickSpeed, stamp, result, true);
+        }
+    }
+
+    private record ActiveTick(
+            ServerLevel level,
+            LevelChunk chunk,
+            RuntimeState runtime,
+            ClimateTickrateChunkStamp stamp,
+            TickResult result,
+            boolean burst
+    ) {
     }
 
     private static final class RuntimeState {

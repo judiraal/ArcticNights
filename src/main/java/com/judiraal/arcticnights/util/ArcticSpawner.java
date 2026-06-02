@@ -122,7 +122,7 @@ public class ArcticSpawner {
                 ? 1.0F
                 : SpawnEcology.creeperFactor(biome, temperature, caveFactor);
         return new CreeperSpawnProbe(
-                biomeId == null ? "unknown" : biomeId.toString(),
+                biomeId,
                 ClimateService.estimatedCelsius(temperature),
                 temperature,
                 caveFactor,
@@ -132,7 +132,7 @@ public class ArcticSpawner {
     }
 
     public record CreeperSpawnProbe(
-            String biomeId,
+            @Nullable ResourceLocation biomeId,
             double estimatedCelsius,
             float minecraftTemperature,
             float caveFactor,

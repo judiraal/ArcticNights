@@ -92,12 +92,25 @@ public final class ClimateService {
     }
 
     public static ClimateSnapshot sampleSnapshot(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, long dayTime) {
-        return snapshot(level, biome, pos, exposedToSky, weatherState, Calculations.seasonalFactor(level, dayTime), dayTime);
+        float seasonFactor = Calculations.seasonalFactor(level, dayTime);
+        return snapshot(level, biome, pos, exposedToSky, weatherState, seasonFactor, dayTime);
+    }
+
+    public static float sampleOutdoorMinecraftTemperature(ServerLevel level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, long dayTime) {
+        weatherState = effectiveWeatherState(biome, exposedToSky, weatherState);
+        float seasonFactor = Calculations.seasonalFactor(level, dayTime);
+        float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactor, dayTime);
+        float dayNightOffset = dayNightOffset(biome, dayTime);
+        return outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression(weatherState, exposedToSky));
     }
 
     private static ClimateSnapshot snapshot(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
+        return snapshot(level, biome, pos, exposedToSky, weatherState, seasonFactor(level, seasonFactorOverride), dayTime);
+    }
+
+    private static ClimateSnapshot snapshot(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, float seasonFactor, long dayTime) {
         weatherState = effectiveWeatherState(biome, exposedToSky, weatherState);
-        float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactorOverride, dayTime);
+        float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactor, dayTime);
         float dayNightOffset = dayNightOffset(biome, dayTime);
         float weatherCompression = weatherCompression(weatherState, exposedToSky);
         float outdoorMinecraftTemperature = outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression);
@@ -295,6 +308,10 @@ public final class ClimateService {
 
     private static float minecraftTemperature(Level level, Holder<Biome> biome, BlockPos pos, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
         float seasonFactor = seasonFactor(level, seasonFactorOverride);
+        return minecraftTemperature(level, biome, pos, weatherState, seasonFactor, dayTime);
+    }
+
+    private static float minecraftTemperature(Level level, Holder<Biome> biome, BlockPos pos, ClimateSnapshot.WeatherState weatherState, float seasonFactor, long dayTime) {
         float baseTemperature = baseTemperature(biome, pos, seasonFactor);
         return baseTemperature + climateAnomaly(level, pos, seasonFactor, weatherState, baseTemperature, dayTime);
     }
