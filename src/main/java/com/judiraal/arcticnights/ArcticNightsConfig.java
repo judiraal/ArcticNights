@@ -44,6 +44,14 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.IntValue tickrateCatchupHistoryWindowTicks;
     public static ModConfigSpec.IntValue tickrateCatchupPrecipitationAttemptIntervalTicks;
     public static ModConfigSpec.IntValue tickrateCatchupMaxBurstChunksPerTick;
+    public static ModConfigSpec.BooleanValue visualSnowCover;
+    public static ModConfigSpec.BooleanValue visualSnowCoverPipelineSubstitution;
+    public static ModConfigSpec.IntValue visualSnowCoverRequiredAdjacentLayers;
+    public static ModConfigSpec.BooleanValue visualSnowCoverCountEligibleNeighbors;
+    public static ModConfigSpec.IntValue visualSnowCoverRequiredRealAdjacentLayers;
+    public static ModConfigSpec.ConfigValue<List<? extends String>> visualSnowCoverAllowlist;
+    public static ModConfigSpec.ConfigValue<List<? extends String>> visualSnowCoverDenylist;
+    public static ModConfigSpec.ConfigValue<List<? extends String>> visualSnowCoverBuriedOriginals;
 
     private ArcticNightsConfig(final ModConfigSpec.Builder builder) {
         circumferenceBlockDistance = builder.comment("The distance in blocks for a full circumference, i.e. double the distance between two poles.")
@@ -132,6 +140,120 @@ public class ArcticNightsConfig {
                         "This does not change the per-chunk multiplier.")
                 .defineInRange("maxBurstChunksPerTick", 32, 1, 512);
         builder.pop();
+
+        builder.push("visualSnowCover");
+        visualSnowCover = builder.comment("Client-only visual snow overlay for plants and small ground clutter surrounded by snow layers.",
+                        "This renders an extra one-layer snow model during chunk meshing only; it does not change blocks, drops, growth, collision, light, or server state.")
+                .define("enabled", true);
+        visualSnowCoverPipelineSubstitution = builder.comment("Render eligible plant positions as snow in the normal chunk pipeline, then add the original plant model back as extra geometry.",
+                        "This keeps visual snow on the same render path as real snow, avoiding subtle color differences next to real snow layers.",
+                        "Disable to use the older extra-snow overlay renderer for comparison.")
+                .define("pipelineSubstitution", true);
+        visualSnowCoverRequiredAdjacentLayers = builder.comment("Number of north/east/south/west same-Y neighboring snow-layer blocks required before a visual cover is rendered.")
+                .defineInRange("requiredAdjacentLayers", 3, 1, 4);
+        visualSnowCoverCountEligibleNeighbors = builder.comment("Count adjacent visualSnowCover-eligible blocks as potential snow neighbors when this block also touches enough real snow.",
+                        "This helps snow visually bridge flowers and ground clutter inside a snowy patch without spreading from vegetation alone.")
+                .define("countEligibleNeighbors", true);
+        visualSnowCoverRequiredRealAdjacentLayers = builder.comment("Minimum number of real north/east/south/west same-Y snow-layer blocks required when countEligibleNeighbors is enabled.")
+                .defineInRange("requiredRealAdjacentLayers", 1, 1, 4);
+        visualSnowCoverAllowlist = builder.comment("Blocks or block tags eligible for client-only visual snow cover.",
+                        "Use exact ids like \"minecraft:short_grass\" or tags like \"#minecraft:replaceable\".",
+                        "The default intentionally includes broad replaceables plus saplings, small mushrooms, beach debris, and Project Vibrant Journeys outdoor flowers and low ground clutter.")
+                .defineListAllowEmpty("allowlist", ArcticNightsConfig::defaultVisualSnowCoverAllowlist, () -> "", value -> value instanceof String);
+        visualSnowCoverDenylist = builder.comment("Blocks or block tags excluded from client-only visual snow cover even if they match the allowlist.",
+                        "Use this to keep crops, vines, aquatic plants, pots, and functional blocks readable.")
+                .defineListAllowEmpty("denylist", ArcticNightsConfig::defaultVisualSnowCoverDenylist, () -> "", value -> value instanceof String);
+        visualSnowCoverBuriedOriginals = builder.comment("Eligible blocks or block tags whose original model should not be rendered back after snow substitution.",
+                        "Use this for low ground clutter that should disappear under one snow layer or can z-fight with the snow model when re-rendered.")
+                .defineListAllowEmpty("buriedOriginals", ArcticNightsConfig::defaultVisualSnowCoverBuriedOriginals, () -> "", value -> value instanceof String);
+        builder.pop();
         builder.build();
+    }
+
+    private static List<String> defaultVisualSnowCoverAllowlist() {
+        return List.of(
+                "#minecraft:replaceable",
+                "#minecraft:flowers",
+                "minecraft:short_grass",
+                "minecraft:tall_grass",
+                "minecraft:fern",
+                "minecraft:large_fern",
+                "minecraft:dead_bush",
+                "minecraft:pink_petals",
+                "minecraft:brown_mushroom",
+                "minecraft:red_mushroom",
+                "#minecraft:saplings",
+                "ecologics:seashell",
+                "projectvibrantjourneys:short_grass",
+                "projectvibrantjourneys:beach_grass",
+                "projectvibrantjourneys:sandy_sprouts",
+                "projectvibrantjourneys:sea_oats",
+                "projectvibrantjourneys:beached_kelp",
+                "projectvibrantjourneys:dried_beached_kelp",
+                "projectvibrantjourneys:yellow_wildflowers",
+                "projectvibrantjourneys:orange_wildflowers",
+                "projectvibrantjourneys:blue_wildflowers",
+                "projectvibrantjourneys:purple_wildflowers",
+                "projectvibrantjourneys:white_wildflowers",
+                "projectvibrantjourneys:mixed_wildflowers",
+                "projectvibrantjourneys:twigs",
+                "projectvibrantjourneys:birch_twigs",
+                "projectvibrantjourneys:rocks",
+                "projectvibrantjourneys:mossy_rocks",
+                "projectvibrantjourneys:pinecones",
+                "#projectvibrantjourneys:groundcover",
+                "#projectvibrantjourneys:fallen_leaves"
+        );
+    }
+
+    private static List<String> defaultVisualSnowCoverDenylist() {
+        return List.of(
+                "#minecraft:crops",
+                "#minecraft:flower_pots",
+                "#minecraft:climbable",
+                "#minecraft:cave_vines",
+                "#minecraft:corals",
+                "#minecraft:wall_corals",
+                "#minecraft:coral_plants",
+                "minecraft:air",
+                "minecraft:cave_air",
+                "minecraft:void_air",
+                "minecraft:powder_snow",
+                "minecraft:bamboo",
+                "minecraft:cactus",
+                "minecraft:sugar_cane",
+                "minecraft:sweet_berry_bush",
+                "minecraft:kelp",
+                "minecraft:kelp_plant",
+                "minecraft:seagrass",
+                "minecraft:tall_seagrass",
+                "minecraft:torchflower_crop",
+                "minecraft:pitcher_crop",
+                "minecraft:chorus_flower",
+                "minecraft:chorus_plant",
+                "projectvibrantjourneys:cattail",
+                "projectvibrantjourneys:reeds",
+                "projectvibrantjourneys:watergrass",
+                "projectvibrantjourneys:pink_vines",
+                "projectvibrantjourneys:pink_vines_plant",
+                "projectvibrantjourneys:prickly_bush",
+                "projectvibrantjourneys:small_cactus",
+                "projectvibrantjourneys:cindercane",
+                "projectvibrantjourneys:crimson_nettle",
+                "projectvibrantjourneys:warped_nettle",
+                "projectvibrantjourneys:glowcap",
+                "projectvibrantjourneys:glowing_blue_fungus",
+                "projectvibrantjourneys:huge_glowcap_block"
+        );
+    }
+
+    private static List<String> defaultVisualSnowCoverBuriedOriginals() {
+        return List.of(
+                "ecologics:seashell",
+                "projectvibrantjourneys:beached_kelp",
+                "projectvibrantjourneys:dried_beached_kelp",
+                "#projectvibrantjourneys:groundcover",
+                "#projectvibrantjourneys:fallen_leaves"
+        );
     }
 }

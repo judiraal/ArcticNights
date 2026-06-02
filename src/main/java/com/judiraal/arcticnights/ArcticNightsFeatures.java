@@ -39,4 +39,24 @@ public final class ArcticNightsFeatures {
     public static boolean tickrateClimateCatchupDiagnostics() {
         return ArcticNightsConfig.tickrateCatchupDiagnostics.getAsBoolean();
     }
+
+    public static boolean visualSnowCover() {
+        return ArcticNightsConfig.visualSnowCover.getAsBoolean();
+    }
+
+    public static boolean visualSnowCoverPipelineSubstitution() {
+        return ArcticNightsConfig.visualSnowCoverPipelineSubstitution.getAsBoolean();
+    }
+
+    public static int visualSnowCoverRequiredAdjacentLayers() {
+        return ArcticNightsConfig.visualSnowCoverRequiredAdjacentLayers.getAsInt();
+    }
+
+    public static boolean visualSnowCoverCountEligibleNeighbors() {
+        return ArcticNightsConfig.visualSnowCoverCountEligibleNeighbors.getAsBoolean();
+    }
+
+    public static int visualSnowCoverRequiredRealAdjacentLayers() {
+        return ArcticNightsConfig.visualSnowCoverRequiredRealAdjacentLayers.getAsInt();
+    }
 }
