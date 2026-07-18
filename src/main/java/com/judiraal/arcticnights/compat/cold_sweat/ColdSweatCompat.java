@@ -41,7 +41,8 @@ public final class ColdSweatCompat {
                 OUTDOOR_CLIMATE_MODIFIER.equals(modifier.getID()) || modifier instanceof OutdoorClimateTempModifier
                         || BLOCK_TEMP_MODIFIER.equals(modifier.getID()) || modifier instanceof ArcticBlockTempModifier);
         if (!ArcticNightsFeatures.climateSystem()) return;
-        event.removeModifiers(Temperature.Trait.WORLD, modifier -> modifier instanceof BlockTempModifier);
+        // Keep Cold Sweat subclasses such as its Sable sublevel scanner; only replace the normal world scanner.
+        event.removeModifiers(Temperature.Trait.WORLD, modifier -> modifier.getClass() == BlockTempModifier.class);
 
         Placement outdoorPlacement = Placement
                 .of(Mode.ADD_AFTER, Order.FIRST, modifier -> modifier instanceof BiomeTempModifier)
