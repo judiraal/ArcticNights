@@ -446,11 +446,13 @@ public final class ClimateTickrateCatchup {
 
         double snowFactor = 0.0D;
         double meltFactor = 0.0D;
-        for (LocalClimateSample sample : samples.samples()) {
+        BlockPos.MutableBlockPos samplePos = new BlockPos.MutableBlockPos();
+        for (int i = 0; i < samples.size(); i++) {
+            Holder<Biome> biome = samples.biome(i);
             float outdoorTemperature = ClimateService.sampleOutdoorMinecraftTemperature(level,
-                    sample.biome(), sample.pos(), true, weatherState, sampleDayTime);
+                    biome, samples.pos(i, samplePos), true, weatherState, sampleDayTime);
             double accumulationFactor = ClimateService.snowAccumulationFactor(outdoorTemperature);
-            boolean hasPrecipitation = sample.biome().value().hasPrecipitation();
+            boolean hasPrecipitation = biome.value().hasPrecipitation();
             double sampleSnowFactor = weatherState == ClimateSnapshot.WeatherState.CLEAR || !hasPrecipitation
                     ? 0.0D
                     : accumulationFactor;
@@ -562,37 +564,40 @@ public final class ClimateTickrateCatchup {
         return String.format(java.util.Locale.ROOT, "%.3f", value);
     }
 
-    private record LocalClimateSamples(List<LocalClimateSample> samples) {
-        private static final int[][] SAMPLE_COLUMNS = {
-                {8, 8},
-                {3, 3},
-                {12, 3},
-                {3, 12},
-                {12, 12}
-        };
+    private record LocalClimateSamples(long[] positions, Holder<Biome>[] biomes) {
+        private static final int[] SAMPLE_LOCAL_X = {8, 3, 12, 3, 12};
+        private static final int[] SAMPLE_LOCAL_Z = {8, 3, 3, 12, 12};
 
+        @SuppressWarnings("unchecked")
         private static LocalClimateSamples of(ServerLevel level, LevelChunk chunk) {
             ChunkPos chunkPos = chunk.getPos();
-            ArrayList<LocalClimateSample> samples = new ArrayList<>(SAMPLE_COLUMNS.length);
-            for (int[] column : SAMPLE_COLUMNS) {
-                int localX = column[0];
-                int localZ = column[1];
+            long[] positions = new long[SAMPLE_LOCAL_X.length];
+            Holder<Biome>[] biomes = (Holder<Biome>[]) new Holder[SAMPLE_LOCAL_X.length];
+            for (int i = 0; i < SAMPLE_LOCAL_X.length; i++) {
+                int localX = SAMPLE_LOCAL_X[i];
+                int localZ = SAMPLE_LOCAL_Z[i];
                 int x = chunkPos.getMinBlockX() + localX;
                 int z = chunkPos.getMinBlockZ() + localZ;
                 int y = Mth.clamp(chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, localX, localZ) + 1,
                         level.getMinBuildHeight(), level.getMaxBuildHeight() - 1);
-                BlockPos pos = new BlockPos(x, y, z);
-                samples.add(new LocalClimateSample(pos, chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z))));
+                positions[i] = BlockPos.asLong(x, y, z);
+                biomes[i] = chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z));
             }
-            return new LocalClimateSamples(samples);
+            return new LocalClimateSamples(positions, biomes);
         }
 
         private int size() {
-            return samples.size();
+            return positions.length;
         }
-    }
 
-    private record LocalClimateSample(BlockPos pos, Holder<Biome> biome) {
+        private Holder<Biome> biome(int index) {
+            return biomes[index];
+        }
+
+        private BlockPos.MutableBlockPos pos(int index, BlockPos.MutableBlockPos target) {
+            long packedPos = positions[index];
+            return target.set(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
+        }
     }
 
     private static final class ReplayPlanBuilder {

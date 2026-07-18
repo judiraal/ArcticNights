@@ -218,9 +218,14 @@ public final class VisualSnowCoverRenderer {
         }
     }
 
-    record Matcher(MatchSet allow, MatchSet deny) {
+    record Matcher(MatchSet allow, MatchSet deny, ReferenceSet<Block> resolvedAllow, ReferenceSet<Block> resolvedDeny) {
+        Matcher(MatchSet allow, MatchSet deny) {
+            this(allow, deny, allow.resolveBlocks(), deny.resolveBlocks());
+        }
+
         boolean allows(BlockState state) {
-            return allow.matches(state) && !deny.matches(state);
+            Block block = state.getBlock();
+            return resolvedAllow.contains(block) && !resolvedDeny.contains(block);
         }
     }
 
@@ -265,10 +270,26 @@ public final class VisualSnowCoverRenderer {
 
         boolean matches(BlockState state) {
             if (blocks.contains(state.getBlock())) return true;
-            for (TagKey<Block> tag : tags) {
-                if (state.is(tag)) return true;
+            for (int i = 0; i < tags.size(); i++) {
+                if (state.is(tags.get(i))) return true;
             }
             return false;
+        }
+
+        ReferenceSet<Block> resolveBlocks() {
+            ReferenceSet<Block> resolved = new ReferenceOpenHashSet<>(blocks);
+            if (tags.isEmpty()) return resolved;
+
+            for (Block block : BuiltInRegistries.BLOCK) {
+                BlockState state = block.defaultBlockState();
+                for (int i = 0; i < tags.size(); i++) {
+                    if (state.is(tags.get(i))) {
+                        resolved.add(block);
+                        break;
+                    }
+                }
+            }
+            return resolved;
         }
     }
 

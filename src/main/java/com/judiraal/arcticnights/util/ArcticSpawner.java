@@ -63,10 +63,6 @@ public class ArcticSpawner {
         return t;
     }
 
-    private static boolean isRainCooling(ServerLevel level, Holder<Biome> biome, BlockPos pos) {
-        return ClimateService.isRainCooling(level, biome, pos);
-    }
-
     public static float spawnFactor(EntityType<?> entityType, BlockPos pos, ServerLevel level) {
         if (entityType == EntityType.WITCH) {
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
@@ -105,11 +101,20 @@ public class ArcticSpawner {
                     caveFactor
             );
         } else if (entityType.is(SpawnEcology.REQUIRE_HOT)) {
-            if (entityType == EntityType.CREEPER) return creeperSpawnProbe(pos, level).factor();
+            if (entityType == EntityType.CREEPER) return creeperSpawnFactor(pos, level);
             var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
             return SpawnEcology.creeperFactor(biome, ClimateService.outdoorMinecraftTemperature(level, biome, pos), getCaveFactor(level, pos));
         }
         return 1.0F;
+    }
+
+    private static float creeperSpawnFactor(BlockPos pos, ServerLevel level) {
+        if (isNearUndergroundLavaLake(level, pos)) return 1.0F;
+
+        var biome = level.getNoiseBiome(pos.getX() >> 2, pos.getY() >> 2, pos.getZ() >> 2);
+        float temperature = ClimateService.outdoorMinecraftTemperature(level, biome, pos);
+        float caveFactor = getCaveFactor(level, pos);
+        return SpawnEcology.creeperFactor(biome, temperature, caveFactor);
     }
 
     public static CreeperSpawnProbe creeperSpawnProbe(BlockPos pos, ServerLevel level) {
