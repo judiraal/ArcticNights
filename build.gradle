@@ -15,6 +15,13 @@ group = mod_group_id
 
 repositories {
     mavenLocal()
+    maven {
+        name = "CaffeineMC"
+        url = "https://maven.caffeinemc.net/releases"
+        content {
+            includeGroup "net.caffeinemc"
+        }
+    }
     exclusiveContent {
         forRepository {
             maven {
@@ -82,11 +89,11 @@ dependencies {
 
     compileOnly "curse.maven:serene-seasons-291874:6182596"
     compileOnly "curse.maven:glitchcore-955399:5660740"
-    compileOnly "curse.maven:sodium-394468:6382651"
-    compileOnly "curse.maven:irisshaders-455508:6661598"
+    compileOnly "net.caffeinemc:sodium-neoforge-mod:0.8.12+mc1.21.1"
+    compileOnly "curse.maven:irisshaders-455508:8242804"
     compileOnly "curse.maven:cold-sweat-506194:8302211"
-    compileOnly "curse.maven:weather-storms-tornadoes-237746:6926103"
-    compileOnly "curse.maven:minecolonies-245506:7384176"
+    compileOnly "curse.maven:weather-storms-tornadoes-237746:8140264"
+    compileOnly "curse.maven:minecolonies-245506:8138370"
 }
 
 tasks.withType(ProcessResources).configureEach {
