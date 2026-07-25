@@ -8,6 +8,7 @@ import com.judiraal.arcticnights.util.ClimatePlayerHarness;
 import com.judiraal.arcticnights.util.ClimateService;
 import com.judiraal.arcticnights.util.ClimateTickrateCatchup;
 import com.judiraal.arcticnights.util.ClimateVisualWeatherNetworking;
+import com.judiraal.arcticnights.util.TornadoSeasonPolicy;
 import com.judiraal.arcticnights.util.UndeadSpawnDiagnostics;
 import com.judiraal.arcticnights.worldgen.ArcticNightsDensityFunctionTypes;
 import com.mojang.logging.LogUtils;
@@ -91,6 +92,7 @@ public class ArcticNights {
     public static void onServerTick(ServerTickEvent.Post event) {
         ClimatePlayerHarness.onServerTick(event);
         ClimateTickrateCatchup.onServerTick(event);
+        TornadoSeasonPolicy.observeCalendar(event.getServer());
     }
 
     @SubscribeEvent

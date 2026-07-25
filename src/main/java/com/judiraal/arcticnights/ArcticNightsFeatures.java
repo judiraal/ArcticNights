@@ -1,5 +1,9 @@
 package com.judiraal.arcticnights;
 
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public final class ArcticNightsFeatures {
     private ArcticNightsFeatures() {
     }
@@ -46,6 +50,29 @@ public final class ArcticNightsFeatures {
 
     public static boolean visualSnowCoverPipelineSubstitution() {
         return ArcticNightsConfig.visualSnowCoverPipelineSubstitution.getAsBoolean();
+    }
+
+    public static boolean tornadoSeasonEnabled() {
+        return ArcticNightsConfig.tornadoSeasonEnabled.getAsBoolean();
+    }
+
+    public static int tornadoGraceYears() {
+        return ArcticNightsConfig.tornadoGraceYears.getAsInt();
+    }
+
+    public static Set<String> tornadoAllowedSubSeasons() {
+        return ArcticNightsConfig.tornadoAllowedSubSeasons.get().stream()
+                .map(String::trim)
+                .map(name -> name.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    public static double tornadoNaturalChanceMultiplier() {
+        return ArcticNightsConfig.tornadoNaturalChanceMultiplier.getAsDouble();
+    }
+
+    public static int daysPerSeason() {
+        return ArcticNightsConfig.daysPerSeason.getAsInt();
     }
 
     public static int visualSnowCoverRequiredAdjacentLayers() {

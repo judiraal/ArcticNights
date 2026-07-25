@@ -94,6 +94,21 @@ dependencies {
     compileOnly "curse.maven:cold-sweat-506194:8302211"
     compileOnly "curse.maven:weather-storms-tornadoes-237746:8140264"
     compileOnly "curse.maven:minecolonies-245506:8138370"
+
+    testRuntimeOnly "curse.maven:serene-seasons-291874:6182596"
+    testRuntimeOnly "curse.maven:weather-storms-tornadoes-237746:8140264"
+}
+
+tasks.register('runUnitFixtures', JavaExec) {
+    group = 'verification'
+    description = 'Runs lightweight Arctic Nights policy and optional-mod contract fixtures.'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.judiraal.arcticnights.test.ArcticNightsFixtureMain'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('runUnitFixtures')
 }
 
 tasks.withType(ProcessResources).configureEach {

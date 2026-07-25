@@ -32,6 +32,10 @@ public class ArcticNightsConfig {
     public static ModConfigSpec.BooleanValue coldSweatClientDiagnostics;
     public static ModConfigSpec.BooleanValue fullMelting;
     public static ModConfigSpec.BooleanValue alternativeTornadoStrengthGrabbing;
+    public static ModConfigSpec.BooleanValue tornadoSeasonEnabled;
+    public static ModConfigSpec.IntValue tornadoGraceYears;
+    public static ModConfigSpec.ConfigValue<List<? extends String>> tornadoAllowedSubSeasons;
+    public static ModConfigSpec.DoubleValue tornadoNaturalChanceMultiplier;
     public static ModConfigSpec.BooleanValue tickrateClimateCatchup;
     public static ModConfigSpec.BooleanValue tickrateCatchupDiagnostics;
     public static ModConfigSpec.BooleanValue tickrateCatchupNewChunksUseRecentExposure;
@@ -91,6 +95,29 @@ public class ArcticNightsConfig {
                 .define("fullMelting", false);
         alternativeTornadoStrengthGrabbing = builder.comment("Enable alternative tornado strength grabbing, limiting debug output, optimizing performance and allowing more blocks to grab.")
                 .define("alternativeTornadoStrengthGrabbing", false);
+
+        builder.push("tornadoSeason");
+        tornadoSeasonEnabled = builder.comment(
+                        "Limit naturally rolled Weather2 land tornadoes by world age, season, and chance.",
+                        "Rain, thunder, high wind, hail, water cyclones, and operator-summoned storms are not changed.")
+                .define("enabled", false);
+        tornadoGraceYears = builder.comment(
+                        "Number of complete seasonal years before natural land tornadoes may form.",
+                        "A year uses the Serene Seasons cycle when available, otherwise four times daysPerSeason.")
+                .defineInRange("graceYears", 1, 0, 100);
+        tornadoAllowedSubSeasons = builder.comment(
+                        "Sub-seasons in which natural land tornadoes may form after the grace period.",
+                        "Valid values are EARLY/MID/LATE_SPRING, SUMMER, AUTUMN, and WINTER.")
+                .defineListAllowEmpty(
+                        "allowedSubSeasons",
+                        () -> List.of("EARLY_SPRING", "MID_SPRING", "LATE_SPRING"),
+                        () -> "",
+                        value -> value instanceof String name && com.judiraal.arcticnights.util.TornadoSeasonPolicy.isValidSubSeasonName(name));
+        tornadoNaturalChanceMultiplier = builder.comment(
+                        "Additional acceptance chance applied only after Weather2 has rolled a natural land tornado.",
+                        "Rejected tornado rolls become hail while preserving Weather2's dangerous-storm cooldown.")
+                .defineInRange("naturalChanceMultiplier", 0.5D, 0.0D, 1.0D);
+        builder.pop();
 
         builder.push("commands");
         climateMaintenanceCommands = builder.comment("Register /arcticnights climate maintenance commands for snow profiling, tick-rate inspection/reset, and climate harness tests.")

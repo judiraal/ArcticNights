@@ -12,6 +12,7 @@ The mod is built for packs that want distance and climate to matter. In Immersiv
 - Optional tag-driven spawn ecology for seasonal and climate-sensitive mob pressure.
 - Optional structure-denial belt for packs that want civilization to be absent from specific latitude ranges.
 - Optional snow accumulation, full-block snow melt, seasonal vegetation regrowth, and tornado block-grab adjustments.
+- Optional world-age and season policy for naturally rolled Weather2 land tornadoes, without suppressing ordinary storms, hail, or operator test summons.
 - Config-gated maintenance commands and diagnostics for pack authors.
 
 ## Compatibility

@@ -57,6 +57,7 @@ public class ConditionalMixin implements IMixinConfigPlugin {
             Map.entry("com.judiraal.arcticnights.mixin.weather2.ClientWeatherProxyMixin", "weather2"),
             Map.entry("com.judiraal.arcticnights.mixin.weather2.SceneEnhancerMixin", "weather2"),
             Map.entry("com.judiraal.arcticnights.mixin.weather2.StormObjectTopYBlockMixin", "weather2"),
+            Map.entry("com.judiraal.arcticnights.mixin.weather2.StormObjectTornadoSeasonMixin", "weather2"),
             Map.entry("com.judiraal.arcticnights.mixin.weather2.TornadoHelperMixin", "weather2"),
             Map.entry("com.judiraal.arcticnights.mixin.weather2.WeatherCommandMixin", "weather2"),
             Map.entry("com.judiraal.arcticnights.mixin.weather2.WeatherObjectParticleStormMixin", "weather2"),
