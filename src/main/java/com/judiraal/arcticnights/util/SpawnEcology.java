@@ -33,6 +33,8 @@ public final class SpawnEcology {
             TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(ArcticNights.MOD_ID, "witch_wetlands"));
     static final TagKey<EntityType<?>> REQUIRE_COLD =
             TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(ArcticNights.MOD_ID, "require_cold"));
+    static final TagKey<EntityType<?>> UPPER_CAVE_REQUIRE_COLD =
+            TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(ArcticNights.MOD_ID, "upper_cave_require_cold"));
     static final TagKey<EntityType<?>> REQUIRE_HOT =
             TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(ArcticNights.MOD_ID, "require_hot"));
     static final TagKey<EntityType<?>> REQUIRE_AUTUMN_OR_DEEP =
@@ -57,6 +59,11 @@ public final class SpawnEcology {
         if (factor <= 0.0F) return 0.0F;
         float adjusted = snowOrIceSurface ? factor : factor / UNDEAD_BARE_GROUND_DIVISOR;
         return activelySnowing ? adjusted * UNDEAD_ACTIVE_SNOW_MULTIPLIER : adjusted;
+    }
+
+    static boolean upperCaveColdRequirementSatisfied(int blockY, float caveFactor, float spawnTemperature, boolean coldCaveProfile) {
+        if (blockY < 32 || caveFactor <= 0.0F) return true;
+        return coldCaveProfile || spawnTemperature <= UNDEAD_COLD_THRESHOLD;
     }
 
     public static boolean activelySnowing(ClimateSnapshot snapshot) {

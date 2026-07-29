@@ -79,7 +79,16 @@ public class ArcticSpawner {
                 rainCooling = true;
                 dryTemperature = ClimateService.clearOutdoorMinecraftTemperature(level, biome, pos, exposedToSky);
             }
-            float factor = SpawnEcology.undeadFactor(biome, temp, dryTemperature, getCaveFactor(level, pos), rainCooling);
+            float caveFactor = getCaveFactor(level, pos);
+            if (entityType.is(SpawnEcology.UPPER_CAVE_REQUIRE_COLD)
+                    && !SpawnEcology.upperCaveColdRequirementSatisfied(
+                            pos.getY(),
+                            caveFactor,
+                            temp,
+                            CaveTemperatureProfile.hasColdProfile(biome))) {
+                return 0.0F;
+            }
+            float factor = SpawnEcology.undeadFactor(biome, temp, dryTemperature, caveFactor, rainCooling);
             return SpawnEcology.undeadSurfaceWeatherFactor(
                     factor,
                     isSnowOrIceSurface(level.getBlockState(pos.below())),

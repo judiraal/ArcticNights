@@ -290,7 +290,8 @@ public final class ClimateService {
 
     private static float biomeOffset(Holder<Biome> biome) {
         float biomeTemperature = biome.value().getBaseTemperature();
-        return Mth.clamp(biomeTemperature - 0.8F, -0.45F, 0.45F) * 0.4F;
+        float rawBiomeOffset = Mth.clamp(biomeTemperature - 0.8F, -0.45F, 0.45F) * 0.4F;
+        return rawBiomeOffset + CaveTemperatureProfile.minecraftOffset(biome);
     }
 
     private static float baseTemperature(Holder<Biome> biome, BlockPos pos, float seasonFactor) {
