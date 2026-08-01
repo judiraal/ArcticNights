@@ -59,10 +59,13 @@ public class ArcticNightsConfig {
 
     private ArcticNightsConfig(final ModConfigSpec.Builder builder) {
         circumferenceBlockDistance = builder.comment("The distance in blocks for a full circumference, i.e. double the distance between two poles.")
+                .worldRestart()
                 .defineInRange("circumferenceBlockDistance", 40000, 4000, 400000);
         bandedTemperature = builder.comment("Whether temperature-based biome distribution should follow circumference.")
+                .worldRestart()
                 .define("bandedTemperature", true);
         useLegacyAlgorithm = builder.comment("Use the legacy algorithm that relies on sampler mixin.")
+                .worldRestart()
                 .define("useLegacyAlgorithm", true);
         firstTimeOfDay = builder.comment("First time of day in game ticks when a new game is started.")
                 .defineInRange("firstTimeOfDay", 1000, 0, 12000);

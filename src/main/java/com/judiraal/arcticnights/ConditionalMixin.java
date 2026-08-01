@@ -15,6 +15,7 @@ public class ConditionalMixin implements IMixinConfigPlugin {
             "com.judiraal.arcticnights.mixin.minecraft.VanillaServerLevelPrecipitationMixin";
     private static final Set<String> BASE_MIXINS = Set.of(
             "com.judiraal.arcticnights.mixin.minecraft.BiomeManagerAccessor",
+            "com.judiraal.arcticnights.mixin.minecraft.ChunkMapMixin",
             "com.judiraal.arcticnights.mixin.minecraft.ChunkStatusTasksMixin",
             "com.judiraal.arcticnights.mixin.minecraft.ChunkMapAccessor",
             "com.judiraal.arcticnights.mixin.minecraft.ChunkGeneratorMixin",
@@ -31,7 +32,6 @@ public class ConditionalMixin implements IMixinConfigPlugin {
             "com.judiraal.arcticnights.mixin.minecraft.LevelRendererMixin",
             "com.judiraal.arcticnights.mixin.minecraft.LocalMobCapCalculatorMixin",
             "com.judiraal.arcticnights.mixin.minecraft.NaturalSpawnerMixin",
-            "com.judiraal.arcticnights.mixin.minecraft.NoiseBasedChunkGeneratorMixin",
             "com.judiraal.arcticnights.mixin.minecraft.RenderChunkRegionVisualSnowMixin",
             "com.judiraal.arcticnights.mixin.minecraft.SectionCompilerVisualSnowMixin",
             "com.judiraal.arcticnights.mixin.minecraft.ServerChunkCacheAccessor",

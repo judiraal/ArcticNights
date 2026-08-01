@@ -5,6 +5,7 @@
   "plugin": "com.judiraal.arcticnights.ConditionalMixin",
   "mixins": [
     "minecraft.BiomeManagerAccessor",
+    "minecraft.ChunkMapMixin",
     "iris.CelestialUniformsMixin",
     "iris.PackDirectivesMixin",
     "iris.ShadowRendererMixin",
@@ -20,7 +21,6 @@
     "minecraft.LevelRandomAccessor",
     "minecraft.LocalMobCapCalculatorMixin",
     "minecraft.NaturalSpawnerMixin",
-    "minecraft.NoiseBasedChunkGeneratorMixin",
     "minecraft.ServerChunkCacheAccessor",
     "minecraft.ServerLevelMixin",
     "minecraft.VanillaServerLevelPrecipitationMixin",

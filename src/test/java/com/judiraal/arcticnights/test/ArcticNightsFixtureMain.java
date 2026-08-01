@@ -4,6 +4,7 @@ import com.judiraal.arcticnights.compat.OptionalModHookContractFixture;
 import com.judiraal.arcticnights.util.CaveTemperatureProfileFixture;
 import com.judiraal.arcticnights.util.SpawnEcologyFixture;
 import com.judiraal.arcticnights.util.TornadoSeasonPolicyFixture;
+import com.judiraal.arcticnights.worldgen.WorldgenMixinContractFixture;
 
 public final class ArcticNightsFixtureMain {
     private ArcticNightsFixtureMain() {
@@ -11,6 +12,7 @@ public final class ArcticNightsFixtureMain {
 
     public static void main(String[] args) {
         OptionalModHookContractFixture.run();
+        WorldgenMixinContractFixture.run();
         CaveTemperatureProfileFixture.run();
         SpawnEcologyFixture.run();
         TornadoSeasonPolicyFixture.run();
