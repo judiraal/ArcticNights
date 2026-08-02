@@ -20,7 +20,11 @@ public class OutdoorClimateTempModifier extends TempModifier {
         }
 
         var pos = entity.blockPosition();
-        double targetOutdoor = ClimateService.outdoorMinecraftTemperature(level, level.getBiome(pos), pos);
+        double targetOutdoor = ClimateService.outdoorMinecraftTemperatureBeforeCaveResponse(
+                level,
+                level.getBiome(pos),
+                pos
+        );
         return temperature -> targetOutdoor;
     }
 }

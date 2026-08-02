@@ -96,6 +96,7 @@ dependencies {
     compileOnly "curse.maven:minecolonies-245506:8138370"
 
     testRuntimeOnly "curse.maven:serene-seasons-291874:6182596"
+    testImplementation "curse.maven:cold-sweat-506194:8302211"
     testRuntimeOnly "curse.maven:weather-storms-tornadoes-237746:8140264"
 }
 

@@ -101,7 +101,8 @@ public final class ClimateService {
         float seasonFactor = Calculations.seasonalFactor(level, dayTime);
         float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactor, dayTime);
         float dayNightOffset = dayNightOffset(biome, dayTime);
-        return outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression(weatherState, exposedToSky));
+        float outdoorMinecraftTemperature = outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression(weatherState, exposedToSky));
+        return applyCaveTemperatureResponse(biome, outdoorMinecraftTemperature);
     }
 
     private static ClimateSnapshot snapshot(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
@@ -113,10 +114,17 @@ public final class ClimateService {
         float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactor, dayTime);
         float dayNightOffset = dayNightOffset(biome, dayTime);
         float weatherCompression = weatherCompression(weatherState, exposedToSky);
-        float outdoorMinecraftTemperature = outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression);
+        float clearOutdoorMinecraftTemperature = applyCaveTemperatureResponse(
+                biome,
+                clearOutdoorMinecraftTemperature(minecraftTemperature, dayNightOffset)
+        );
+        float outdoorMinecraftTemperature = applyCaveTemperatureResponse(
+                biome,
+                outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression)
+        );
         return new ClimateSnapshot(
                 minecraftTemperature,
-                clearOutdoorMinecraftTemperature(minecraftTemperature, dayNightOffset),
+                clearOutdoorMinecraftTemperature,
                 outdoorMinecraftTemperature,
                 dayNightOffset,
                 weatherCompression,
@@ -142,10 +150,17 @@ public final class ClimateService {
         float minecraftTemperature = baseTemperature + weatherOffset;
         float dayNightOffset = dayNightOffset(biome, dayTime);
         float weatherCompression = weatherCompression(weatherState, exposedToSky);
-        float outdoorMinecraftTemperature = outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression);
+        float clearOutdoorMinecraftTemperature = applyCaveTemperatureResponse(
+                biome,
+                clearOutdoorMinecraftTemperature(minecraftTemperature, dayNightOffset)
+        );
+        float outdoorMinecraftTemperature = applyCaveTemperatureResponse(
+                biome,
+                outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression)
+        );
         ClimateSnapshot snapshot = new ClimateSnapshot(
                 minecraftTemperature,
-                clearOutdoorMinecraftTemperature(minecraftTemperature, dayNightOffset),
+                clearOutdoorMinecraftTemperature,
                 outdoorMinecraftTemperature,
                 dayNightOffset,
                 weatherCompression,
@@ -191,7 +206,34 @@ public final class ClimateService {
         return outdoorMinecraftTemperature(level, biome, pos, exposedToSky, weatherState, null, level.getDayTime());
     }
 
+    public static float outdoorMinecraftTemperatureBeforeCaveResponse(Level level, Holder<Biome> biome, BlockPos pos) {
+        boolean exposedToSky = isExposedToSky(level, pos);
+        ClimateSnapshot.WeatherState weatherState = weatherState(level, biome, exposedToSky);
+        return calculateOutdoorMinecraftTemperature(
+                level,
+                biome,
+                pos,
+                exposedToSky,
+                weatherState,
+                null,
+                level.getDayTime()
+        );
+    }
+
     private static float outdoorMinecraftTemperature(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
+        float outdoorMinecraftTemperature = calculateOutdoorMinecraftTemperature(
+                level,
+                biome,
+                pos,
+                exposedToSky,
+                weatherState,
+                seasonFactorOverride,
+                dayTime
+        );
+        return applyCaveTemperatureResponse(biome, outdoorMinecraftTemperature);
+    }
+
+    private static float calculateOutdoorMinecraftTemperature(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky, ClimateSnapshot.WeatherState weatherState, @Nullable Float seasonFactorOverride, long dayTime) {
         float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, seasonFactorOverride, dayTime);
         float dayNightOffset = dayNightOffset(biome, dayTime);
         return outdoorMinecraftTemperature(minecraftTemperature, dayNightOffset, weatherCompression(weatherState, exposedToSky));
@@ -204,7 +246,11 @@ public final class ClimateService {
     public static float clearOutdoorMinecraftTemperature(Level level, Holder<Biome> biome, BlockPos pos, boolean exposedToSky) {
         ClimateSnapshot.WeatherState weatherState = weatherState(level, biome, exposedToSky);
         float minecraftTemperature = minecraftTemperature(level, biome, pos, weatherState, null);
-        return clearOutdoorMinecraftTemperature(minecraftTemperature, dayNightOffset(biome, level.getDayTime()));
+        float clearOutdoorMinecraftTemperature = clearOutdoorMinecraftTemperature(
+                minecraftTemperature,
+                dayNightOffset(biome, level.getDayTime())
+        );
+        return applyCaveTemperatureResponse(biome, clearOutdoorMinecraftTemperature);
     }
 
     public static ClimateSnapshot.SnowBehavior snowBehaviorAt(Level level, Holder<Biome> biome, BlockPos pos) {
@@ -629,6 +675,14 @@ public final class ClimateService {
 
     public static float celsiusOffsetToMinecraftTemperatureOffset(double celsiusOffset) {
         return (float) (celsiusOffset / COLD_SWEAT_CELSIUS_PER_MC);
+    }
+
+    public static float applyCaveTemperatureResponse(Holder<Biome> biome, float minecraftTemperature) {
+        return (float) CaveTemperatureProfile.applyTemperatureResponse(biome, minecraftTemperature);
+    }
+
+    public static double applyCaveTemperatureResponse(Holder<Biome> biome, double minecraftTemperature) {
+        return CaveTemperatureProfile.applyTemperatureResponse(biome, minecraftTemperature);
     }
 
     public static void setDebugWeatherOffsetCelsius(MinecraftServer server, double celsiusOffset) {
